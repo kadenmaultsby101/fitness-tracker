@@ -1,6 +1,6 @@
 {
-    "short_name": "Fitness",
-    "name": "Kaden's Fitness Tracker",
+    "short_name": "Pulse",
+    "name": "Pulse",
     "start_url": ".",
     "display": "standalone",
     "theme_color": "#00ff87",
