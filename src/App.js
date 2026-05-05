@@ -285,9 +285,9 @@ export default function App() {
 
       {/* Header */}
       <div style={{ background: "linear-gradient(135deg, #00ff87 0%, #00b4d8 100%)", padding: "20px 20px 16px", position: "sticky", top: 0, zIndex: 10 }}>
-        <div style={{ fontSize: "11px", letterSpacing: "4px", color: "#0a0a0f", fontWeight: "800" }}>KADEN'S</div>
+        <div style={{ fontSize: "11px", letterSpacing: "4px", color: "#0a0a0f", fontWeight: "800" }}>PULSE</div>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-          <div style={{ fontSize: "22px", fontWeight: "900", color: "#0a0a0f" }}>FITNESS TRACKER</div>
+          <div style={{ fontSize: "22px", fontWeight: "900", color: "#0a0a0f" }}>TRACK. IMPROVE. ACHIEVE.</div>
           {streak > 0 && <div style={{ background: "#0a0a0f22", borderRadius: "20px", padding: "4px 10px", fontSize: "12px", fontWeight: "900", color: "#0a0a0f" }}>🔥 {streak}d</div>}
         </div>
         <div style={{ fontSize: "11px", color: "#0a0a0f88", marginTop: "2px" }}>{today.toUpperCase()} • {new Date().toLocaleDateString()}</div>
