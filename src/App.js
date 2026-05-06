@@ -4,6 +4,15 @@ import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, ReferenceL
 
 const DEFAULT_GOALS = { calories: 3200, protein: 150, water: 128, weightGoal: 180 };
 const SUPPLEMENTS = ["Creatine", "Protein Shake"];
+const GEMINI_MODEL = "gemini-2.5-flash";
+const GEMINI_API_KEY = process.env.REACT_APP_GEMINI_API_KEY;
+const COACH_PROMPTS = [
+  "How am I doing this week?",
+  "What should I eat to hit my protein goal today?",
+  "Am I training too much? Should I take a rest day?",
+  "Analyze my weight progress toward 180lbs",
+  "What's the weakest part of my routine right now?",
+];
 const DAYS = ["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"];
 const TYPE_COLORS = { gym: "#00C805", mma: "#FF6B35", climbing: "#4A9EFF" };
 const TYPE_LABELS = { gym: "GYM", mma: "MMA", climbing: "CLIMB" };
@@ -127,6 +136,9 @@ export default function App() {
   const [historyTab, setHistoryTab] = useState("overview");
   const [selectedPastDay, setSelectedPastDay] = useState(null);
   const [selectedDay, setSelectedDay] = useState(getTodayName());
+  const [coachMessages, setCoachMessages] = useState([]);
+  const [coachInput, setCoachInput] = useState("");
+  const [coachLoading, setCoachLoading] = useState(false);
   const today = getTodayName();
 
   const showToast = (msg, isError = false) => { setToast({ msg, isError }); setTimeout(() => setToast(null), 2500); };
@@ -247,6 +259,54 @@ export default function App() {
     loadHistory();
   };
 
+  const buildCoachContext = () => ({
+    profile: { name: "Kaden", age: 18, height: "6'1\"", startWeight, currentWeight, location: "Oakland, CA", training: ["MMA (boxing, jiu jitsu, muay thai)", "rock climbing", "weightlifting"] },
+    goals,
+    today: { date: todayStr(), day: today, calories: dayData.calories, protein: dayData.protein, water: dayData.water, weight: dayData.weight, supplements: dayData.supplements || [], completed_workouts: dayData.completed_workouts || [], food_log: dayData.food_log || [], scheduled: SCHEDULE[today] || [] },
+    streaks: { nutrition: getNutritionStreak(), gym: getGymStreak(), supplements: getSuppStreak() },
+    last14days: history.slice(0, 14).map(d => ({ date: d.date, day: getDayName(d.date), calories: d.calories, protein: d.protein, water: d.water, weight: d.weight, supplements: d.supplements || [], completed_workouts: d.completed_workouts || [] })),
+    recentWorkouts: workoutHistory.slice(0, 5).map(w => ({ date: w.date, type: w.workout_type, exercises: w.exercises })),
+    weeklySchedule: SCHEDULE,
+  });
+  const askCoach = async () => {
+    const q = coachInput.trim();
+    if (!q || coachLoading) return;
+    if (!GEMINI_API_KEY) {
+      setCoachMessages(m => [...m, { role: "user", text: q }, { role: "coach", text: "Missing API key. Add REACT_APP_GEMINI_API_KEY to your Vercel env vars (and local .env), then redeploy." }]);
+      setCoachInput("");
+      return;
+    }
+    const convo = [...coachMessages, { role: "user", text: q }];
+    setCoachMessages(convo);
+    setCoachInput("");
+    setCoachLoading(true);
+    const ctx = buildCoachContext();
+    const systemPrompt = `You are Pulse Coach, Kaden's personal AI fitness coach. He's 18, 6'1", in Oakland CA, bulking from 160 to 180lbs while training MMA, rock climbing, and lifting.
+
+You have full visibility into his nutrition, training, weight, supplements, and schedule (JSON below). Reference specific numbers and patterns. Be direct, motivating, concise — like a coach who actually knows him. No fluff. 2-4 short paragraphs max. Use plain text, no markdown headers.
+
+DATA:
+${JSON.stringify(ctx, null, 2)}`;
+    try {
+      const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${GEMINI_API_KEY}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          systemInstruction: { parts: [{ text: systemPrompt }] },
+          contents: convo.map(m => ({ role: m.role === "user" ? "user" : "model", parts: [{ text: m.text }] })),
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error?.message || `HTTP ${res.status}`);
+      const text = data?.candidates?.[0]?.content?.parts?.[0]?.text;
+      if (!text) throw new Error("Empty response from Gemini");
+      setCoachMessages(m => [...m, { role: "coach", text }]);
+    } catch (e) {
+      setCoachMessages(m => [...m, { role: "coach", text: `Error: ${e.message}\n\nCheck: 1) REACT_APP_GEMINI_API_KEY is set on Vercel, 2) the key is valid at aistudio.google.com, 3) you redeployed after adding it.` }]);
+    }
+    setCoachLoading(false);
+  };
+
   const getNutritionStreak = () => { let s = 0; for (const d of [...history].sort((a,b) => b.date.localeCompare(a.date))) { if ((d.calories||0) >= goals.calories*0.85 && (d.protein||0) >= goals.protein*0.85) s++; else break; } return s; };
   const getGymStreak = () => { let s = 0; const gd = DAYS.filter(d => SCHEDULE[d]?.some(x => x.type === "gym")); for (const d of [...history].sort((a,b) => b.date.localeCompare(a.date))) { const dn = getDayName(d.date); if (gd.includes(dn)) { const gi = SCHEDULE[dn].filter(x => x.type === "gym"); if (gi.some(g => (d.completed_workouts||[]).includes(g.activity))) s++; else break; } } return s; };
   const getSuppStreak = () => { let s = 0; for (const d of [...history].sort((a,b) => b.date.localeCompare(a.date))) { if (SUPPLEMENTS.every(x => (d.supplements||[]).includes(x))) s++; else break; } return s; };
@@ -341,7 +401,7 @@ export default function App() {
       </div>
 
       <div style={{ display:"flex", background:C.bg, borderBottom:`1px solid ${C.border}`, position:"sticky", top:"86px", zIndex:9 }}>
-        {[["today","Today"],["workout","Workout"],["history","History"],["week","Week"],["schedule","Schedule"]].map(([k,l]) => tabBtn(k,l))}
+        {[["today","Today"],["coach","Coach"],["workout","Workout"],["history","History"],["week","Week"],["schedule","Schedule"]].map(([k,l]) => tabBtn(k,l))}
       </div>
 
       <div style={{ padding:"16px", paddingBottom:"48px" }}>
@@ -531,6 +591,47 @@ export default function App() {
             </Card>
 
             <button onClick={resetDay} style={{ width:"100%", background:"transparent", border:`1px solid ${C.border}`, borderRadius:C.rSm, padding:"13px", color:C.textSub, fontSize:"13px", cursor:"pointer", fontFamily:C.font, fontWeight:"500" }}>Reset Day</button>
+          </div>
+        )}
+
+        {tab === "coach" && (
+          <div>
+            <Card accent={C.purple}>
+              <Lbl color={C.purple}>Pulse Coach</Lbl>
+              <div style={{ fontSize:"13px", color:C.textSub, lineHeight:1.5 }}>AI coach with full context of your nutrition, training, weight, and schedule. Ask anything.</div>
+            </Card>
+
+            {coachMessages.length === 0 && (
+              <Card>
+                <Lbl>Try asking</Lbl>
+                <div style={{ display:"flex", flexDirection:"column", gap:"6px" }}>
+                  {COACH_PROMPTS.map((p,i) => (
+                    <button key={i} onClick={() => setCoachInput(p)} style={{ background:C.surfaceUp, border:`1px solid ${C.border}`, borderRadius:C.rSm, padding:"12px 14px", color:C.text, fontSize:"13px", textAlign:"left", cursor:"pointer", fontFamily:C.font, lineHeight:1.4 }}>{p}</button>
+                  ))}
+                </div>
+              </Card>
+            )}
+
+            {coachMessages.map((m,i) => (
+              <div key={i} style={{ marginBottom:"10px", display:"flex", justifyContent: m.role==="user" ? "flex-end" : "flex-start" }}>
+                <div style={{ maxWidth:"86%", background: m.role==="user" ? C.accent : C.surface, color: m.role==="user" ? "#000" : C.text, padding:"12px 14px", borderRadius:C.rSm, fontSize:"14px", lineHeight:1.5, whiteSpace:"pre-wrap", border: m.role==="user" ? "none" : `1px solid ${C.border}`, fontWeight: m.role==="user" ? "500" : "400" }}>{m.text}</div>
+              </div>
+            ))}
+
+            {coachLoading && (
+              <div style={{ marginBottom:"10px", display:"flex", justifyContent:"flex-start" }}>
+                <div style={{ background:C.surface, color:C.textSub, padding:"12px 14px", borderRadius:C.rSm, fontSize:"13px", border:`1px solid ${C.border}`, fontStyle:"italic" }}>Coach is thinking…</div>
+              </div>
+            )}
+
+            <div style={{ position:"sticky", bottom:"8px", background:C.bg, paddingTop:"10px", display:"flex", gap:"8px", marginTop:"8px" }}>
+              <Inp placeholder="Ask your coach..." value={coachInput} onChange={e => setCoachInput(e.target.value)} onKeyDown={e => e.key === "Enter" && askCoach()} />
+              <button onClick={askCoach} disabled={coachLoading || !coachInput.trim()} style={{ background: coachLoading || !coachInput.trim() ? C.surfaceUp : C.accent, border:"none", borderRadius:C.rSm, padding:"12px 18px", color: coachLoading || !coachInput.trim() ? C.textDim : "#000", fontWeight:"700", cursor: coachLoading || !coachInput.trim() ? "not-allowed" : "pointer", fontFamily:C.font, fontSize:"14px", flexShrink:0 }}>Send</button>
+            </div>
+
+            {coachMessages.length > 0 && (
+              <button onClick={() => setCoachMessages([])} style={{ width:"100%", background:"transparent", border:`1px solid ${C.border}`, borderRadius:C.rSm, padding:"10px", color:C.textSub, fontSize:"12px", cursor:"pointer", fontFamily:C.font, marginTop:"12px" }}>Clear chat</button>
+            )}
           </div>
         )}
 
