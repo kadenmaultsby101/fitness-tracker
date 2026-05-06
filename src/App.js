@@ -254,8 +254,18 @@ export default function App() {
   const getWeightData = () => history.filter(d => d.weight).sort((a,b) => a.date.localeCompare(b.date)).map(d => ({ date: fmt(d.date), weight: d.weight }));
   const getAttendance = (days, type) => {
     const sched = DAYS.filter(d => SCHEDULE[d]?.some(s => s.type === type));
+    const ts = todayStr();
     let hit = 0, total = 0; const missed = [], attended = [];
-    days.forEach(d => { const dn = getDayName(d.date); if (sched.includes(dn)) { total++; const items = SCHEDULE[dn].filter(s => s.type === type); if (items.some(i => (d.completed_workouts||[]).includes(i.activity))) { hit++; attended.push(d.date); } else missed.push(d.date); } });
+    // Only count days that have already happened (up to and including today)
+    days.filter(d => d.date <= ts).forEach(d => {
+      const dn = getDayName(d.date);
+      if (sched.includes(dn)) {
+        total++;
+        const items = SCHEDULE[dn].filter(s => s.type === type);
+        if (items.some(i => (d.completed_workouts||[]).includes(i.activity))) { hit++; attended.push(d.date); }
+        else missed.push(d.date);
+      }
+    });
     return { hit, total, missed, attended, rate: total > 0 ? Math.round((hit/total)*100) : 0 };
   };
   const getWeeklyScore = (wd) => {
