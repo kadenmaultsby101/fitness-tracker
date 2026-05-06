@@ -169,13 +169,23 @@ export default function App() {
   useEffect(() => { loadToday(); loadHistory(); loadWorkoutHistory(); loadGoals(); }, [loadToday, loadHistory, loadWorkoutHistory, loadGoals]);
 
   const saveDay = async (updates) => {
-    const merged = { ...dayData, ...updates };
+    const merged = {
+      ...dayData, ...updates,
+      supplements: (updates.supplements ?? dayData.supplements) || [],
+      food_log: (updates.food_log ?? dayData.food_log) || [],
+      completed_workouts: (updates.completed_workouts ?? dayData.completed_workouts) || [],
+    };
     setDayData(merged);
     try {
       await supabase.from("daily_logs").upsert({
-        date: todayStr(), calories: merged.calories, protein: merged.protein, water: merged.water,
-        food_log: merged.food_log, completed_workouts: merged.completed_workouts,
-        weight: merged.weight, supplements: merged.supplements,
+        date: todayStr(),
+        calories: merged.calories || 0,
+        protein: merged.protein || 0,
+        water: merged.water || 0,
+        food_log: merged.food_log,
+        completed_workouts: merged.completed_workouts,
+        weight: merged.weight || null,
+        supplements: merged.supplements,
       }, { onConflict: "date" });
       loadHistory();
     } catch (_) { showToast("Save failed", true); }
@@ -202,7 +212,18 @@ export default function App() {
     const s = dayData.supplements || []; const u = s.includes(name) ? s.filter(x => x !== name) : [...s, name];
     saveDay({ supplements: u }); if (!s.includes(name)) showToast(name + " logged");
   };
-  const toggleScheduleWorkout = (activity) => { const cw = dayData.completed_workouts; saveDay({ completed_workouts: cw.includes(activity) ? cw.filter(w => w !== activity) : [...cw, activity] }); };
+  const toggleScheduleWorkout = (activity) => {
+    const cw = dayData.completed_workouts || [];
+    const updated = cw.includes(activity) ? cw.filter(w => w !== activity) : [...cw, activity];
+    const merged = { ...dayData, completed_workouts: updated };
+    setDayData(merged);
+    supabase.from("daily_logs").upsert({
+      date: todayStr(), calories: merged.calories, protein: merged.protein,
+      water: merged.water, food_log: merged.food_log,
+      completed_workouts: merged.completed_workouts, weight: merged.weight,
+      supplements: merged.supplements,
+    }, { onConflict: "date" }).then(() => loadHistory()).catch(() => showToast("Save failed", true));
+  };
   const getLastSession = (tmpl) => workoutHistory.find(w => w.workout_type === tmpl);
   const addSet = (exerciseName) => {
     if (!setInput.reps) return;
@@ -229,7 +250,7 @@ export default function App() {
   const getNutritionStreak = () => { let s = 0; for (const d of [...history].sort((a,b) => b.date.localeCompare(a.date))) { if ((d.calories||0) >= goals.calories*0.85 && (d.protein||0) >= goals.protein*0.85) s++; else break; } return s; };
   const getGymStreak = () => { let s = 0; const gd = DAYS.filter(d => SCHEDULE[d]?.some(x => x.type === "gym")); for (const d of [...history].sort((a,b) => b.date.localeCompare(a.date))) { const dn = getDayName(d.date); if (gd.includes(dn)) { const gi = SCHEDULE[dn].filter(x => x.type === "gym"); if (gi.some(g => (d.completed_workouts||[]).includes(g.activity))) s++; else break; } } return s; };
   const getSuppStreak = () => { let s = 0; for (const d of [...history].sort((a,b) => b.date.localeCompare(a.date))) { if (SUPPLEMENTS.every(x => (d.supplements||[]).includes(x))) s++; else break; } return s; };
-  const getWeekDays = () => { const ws = getWeekStart(); return history.filter(d => d.date >= ws).sort((a,b) => a.date.localeCompare(b.date)); };
+  const getWeekDays = () => { const ws = getWeekStart(); const ts = todayStr(); return history.filter(d => d.date >= ws && d.date <= ts).sort((a,b) => a.date.localeCompare(b.date)); };
   const getWeightData = () => history.filter(d => d.weight).sort((a,b) => a.date.localeCompare(b.date)).map(d => ({ date: fmt(d.date), weight: d.weight }));
   const getAttendance = (days, type) => {
     const sched = DAYS.filter(d => SCHEDULE[d]?.some(s => s.type === type));
