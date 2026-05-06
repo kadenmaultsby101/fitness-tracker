@@ -263,13 +263,34 @@ export default function App() {
     const ac = wd.reduce((s,d) => s+(d.calories||0),0)/wd.length;
     const ap = wd.reduce((s,d) => s+(d.protein||0),0)/wd.length;
     const aw = wd.reduce((s,d) => s+(d.water||0),0)/wd.length;
-    const ga = getAttendance(wd,"gym").rate;
-    const ma = getAttendance(wd,"mma").rate;
     const sd = wd.filter(d => SUPPLEMENTS.every(s => (d.supplements||[]).includes(s))).length;
-    const sr = (sd/wd.length)*100;
-    return Math.round(Math.min(ac/goals.calories,1)*100*0.25 + Math.min(ap/goals.protein,1)*100*0.25 + ga*0.2 + ma*0.1 + Math.min(aw/goals.water,1)*100*0.1 + sr*0.1);
+    // Training score: for each day check if all scheduled activities were completed
+    const trainingScores = wd.map(d => {
+      const dayName = getDayName(d.date);
+      const scheduled = SCHEDULE[dayName] || [];
+      if (!scheduled.length) return 100; // rest day = full score
+      const completed = d.completed_workouts || [];
+      const done = scheduled.filter(s => completed.includes(s.activity)).length;
+      return Math.round((done / scheduled.length) * 100);
+    });
+    const trainingScore = trainingScores.reduce((s,v) => s+v, 0) / trainingScores.length;
+    const calScore = Math.min(ac/goals.calories,1)*100;
+    const protScore = Math.min(ap/goals.protein,1)*100;
+    const waterScore = Math.min(aw/goals.water,1)*100;
+    const suppScore = (sd/wd.length)*100;
+    return Math.round(calScore*0.25 + protScore*0.25 + trainingScore*0.2 + waterScore*0.15 + suppScore*0.15);
   };
 
+  const getDailyScore = () => {
+    const scheduled = SCHEDULE[today] || [];
+    const completed = dayData.completed_workouts || [];
+    const trainingScore = scheduled.length === 0 ? 100 : Math.round((scheduled.filter(s => completed.includes(s.activity)).length / scheduled.length) * 100);
+    const calScore = Math.min(calPct, 100);
+    const protScore = Math.min(protPct, 100);
+    const waterScore = Math.min(waterPct, 100);
+    const suppScore = SUPPLEMENTS.every(s => (dayData.supplements||[]).includes(s)) ? 100 : (dayData.supplements||[]).length > 0 ? 50 : 0;
+    return Math.round(calScore*0.25 + protScore*0.25 + trainingScore*0.2 + waterScore*0.15 + suppScore*0.15);
+  };
   const nutritionStreak = getNutritionStreak(), gymStreak = getGymStreak(), suppStreak = getSuppStreak();
   const calPct = (dayData.calories/goals.calories)*100, protPct = (dayData.protein/goals.protein)*100, waterPct = (dayData.water/goals.water)*100;
   const weightData = getWeightData();
@@ -317,6 +338,24 @@ export default function App() {
 
         {tab === "today" && (
           <div>
+            {(() => {
+              const ds = getDailyScore();
+              const { grade, color: gc } = gradeWeek(ds);
+              return (
+                <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", background:C.surface, borderRadius:C.r, padding:"14px 18px", marginBottom:"12px", border:`1px solid ${gc}25` }}>
+                  <div>
+                    <div style={{ fontSize:"11px", color:C.textSub, marginBottom:"3px", textTransform:"uppercase", letterSpacing:"0.8px" }}>Today's Score</div>
+                    <div style={{ fontSize:"13px", color:C.textSub }}>{ds >= 90 ? "Crushing it 🔥" : ds >= 75 ? "Solid day 💪" : ds >= 60 ? "Keep pushing" : ds >= 40 ? "Need more effort" : "Get on track"}</div>
+                  </div>
+                  <div style={{ display:"flex", alignItems:"center", gap:"10px" }}>
+                    <div style={{ textAlign:"right" }}>
+                      <div style={{ fontSize:"28px", fontWeight:"700", color:gc, lineHeight:1 }}>{grade}</div>
+                      <div style={{ fontSize:"11px", color:C.textSub, marginTop:"2px" }}>{ds}/100</div>
+                    </div>
+                  </div>
+                </div>
+              );
+            })()}
             <Card>
               <div style={{ display:"flex", gap:"8px", justifyContent:"space-around" }}>
                 {[{label:"Calories",current:dayData.calories,goal:goals.calories,pct:calPct,color:C.accent,unit:""},
