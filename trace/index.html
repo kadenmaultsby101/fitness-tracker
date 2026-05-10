@@ -1,0 +1,161 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>Trace</title>
+  <meta name="description" content="A quiet habit tracker." />
+
+  <!-- PWA + iOS home-screen support. status-bar-style "black" keeps
+       the notch area pure #000000 to match the app background. -->
+  <link rel="manifest" href="manifest.json" />
+  <meta name="theme-color" content="#000000" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black" />
+  <meta name="apple-mobile-web-app-title" content="Trace" />
+  <link rel="apple-touch-icon" href="icon-192.png" />
+  <link rel="icon" type="image/svg+xml" href="icon.svg" />
+  <link rel="icon" type="image/png" sizes="192x192" href="icon-192.png" />
+  <link rel="icon" type="image/png" sizes="512x512" href="icon-512.png" />
+
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <!--
+    All three screens live in the DOM at once and are toggled via
+    a `data-screen` attribute on <body>. Keeps the JS dead simple
+    and avoids any client-side router.
+  -->
+
+  <!-- ============================================================
+       HOME SCREEN
+       ============================================================ -->
+  <main id="screen-home" class="screen" data-screen="home">
+    <header class="app-header">
+      <a class="logo" href="#" aria-label="Trace">
+        <!-- Mini T logo, same geometry as icon.svg -->
+        <svg viewBox="0 0 512 512" width="22" height="22" aria-hidden="true">
+          <rect x="112" y="148" width="288" height="36" fill="currentColor"/>
+          <rect x="238" y="148" width="36"  height="252" fill="currentColor"/>
+        </svg>
+      </a>
+      <button class="icon-btn" id="open-habits" aria-label="Manage habits">
+        <!-- Gear icon, single white stroke -->
+        <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"
+             fill="none" stroke="currentColor" stroke-width="1.5"
+             stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="12" r="3"/>
+          <path d="M19.4 15a1.7 1.7 0 0 0 .34 1.87l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.7 1.7 0 0 0-1.87-.34 1.7 1.7 0 0 0-1.03 1.56V21a2 2 0 1 1-4 0v-.09A1.7 1.7 0 0 0 9 19.4a1.7 1.7 0 0 0-1.87.34l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.7 1.7 0 0 0 4.6 15a1.7 1.7 0 0 0-1.56-1.03H3a2 2 0 1 1 0-4h.09A1.7 1.7 0 0 0 4.6 9a1.7 1.7 0 0 0-.34-1.87l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.7 1.7 0 0 0 9 4.6a1.7 1.7 0 0 0 1.03-1.56V3a2 2 0 1 1 4 0v.09A1.7 1.7 0 0 0 15 4.6a1.7 1.7 0 0 0 1.87-.34l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.7 1.7 0 0 0 19.4 9c.16.6.6 1.06 1.56 1.03H21a2 2 0 1 1 0 4h-.09A1.7 1.7 0 0 0 19.4 15z"/>
+        </svg>
+      </button>
+    </header>
+
+    <p class="date-line" id="date-line">&nbsp;</p>
+
+    <div class="completion">
+      <span class="completion-done" id="completion-done">0</span><!--
+      --><span class="completion-total" id="completion-total">/ 0</span>
+    </div>
+
+    <!-- Section containers are emptied + re-rendered on every state change.
+         Three fixed sections keep the layout calm and predictable. -->
+    <section class="time-section">
+      <h2 class="section-label">Morning</h2>
+      <div class="habit-list" id="list-morning"></div>
+    </section>
+
+    <section class="time-section">
+      <h2 class="section-label">Afternoon</h2>
+      <div class="habit-list" id="list-afternoon"></div>
+    </section>
+
+    <section class="time-section">
+      <h2 class="section-label">Evening</h2>
+      <div class="habit-list" id="list-evening"></div>
+    </section>
+  </main>
+
+  <!-- ============================================================
+       HABITS SCREEN
+       ============================================================ -->
+  <main id="screen-habits" class="screen" data-screen="habits" hidden>
+    <header class="app-header">
+      <button class="icon-btn" data-back aria-label="Back">
+        <!-- Chevron left -->
+        <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"
+             fill="none" stroke="currentColor" stroke-width="1.5"
+             stroke-linecap="round" stroke-linejoin="round">
+          <polyline points="15 6 9 12 15 18"/>
+        </svg>
+      </button>
+      <h1 class="screen-title">Habits</h1>
+      <span class="icon-btn placeholder" aria-hidden="true"></span>
+    </header>
+
+    <section class="time-section">
+      <h2 class="section-label">Morning</h2>
+      <div class="manage-list" id="manage-morning"></div>
+    </section>
+
+    <section class="time-section">
+      <h2 class="section-label">Afternoon</h2>
+      <div class="manage-list" id="manage-afternoon"></div>
+    </section>
+
+    <section class="time-section">
+      <h2 class="section-label">Evening</h2>
+      <div class="manage-list" id="manage-evening"></div>
+    </section>
+
+    <button class="text-btn add-habit" id="add-habit">+ Add habit</button>
+
+    <!-- Settings live at the bottom of the manage screen, intentionally
+         low-key (small muted links rather than chunky toggles). -->
+    <footer class="settings">
+      <div class="settings-row">
+        <span class="settings-label">Notifications</span>
+        <label class="toggle">
+          <input type="checkbox" id="toggle-notifications" />
+          <span class="toggle-track" aria-hidden="true"><span class="toggle-thumb"></span></span>
+        </label>
+      </div>
+      <button class="text-btn danger" id="reset-data">Reset all data</button>
+    </footer>
+  </main>
+
+  <!-- ============================================================
+       EDIT / ADD SCREEN
+       ============================================================ -->
+  <main id="screen-edit" class="screen" data-screen="edit" hidden>
+    <header class="app-header">
+      <button class="icon-btn" data-back aria-label="Back">
+        <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"
+             fill="none" stroke="currentColor" stroke-width="1.5"
+             stroke-linecap="round" stroke-linejoin="round">
+          <polyline points="15 6 9 12 15 18"/>
+        </svg>
+      </button>
+      <h1 class="screen-title" id="edit-title">New habit</h1>
+      <span class="icon-btn placeholder" aria-hidden="true"></span>
+    </header>
+
+    <form id="edit-form" class="edit-form" novalidate>
+      <label class="field-label" for="habit-name">Name</label>
+      <input class="text-input" id="habit-name" type="text" maxlength="60"
+             autocomplete="off" autocapitalize="sentences" spellcheck="false" />
+
+      <p class="field-label">Time of day</p>
+      <div class="segmented" role="radiogroup" aria-label="Time of day">
+        <button type="button" class="seg" data-time="morning" role="radio">Morning</button>
+        <button type="button" class="seg" data-time="afternoon" role="radio">Afternoon</button>
+        <button type="button" class="seg" data-time="evening" role="radio">Evening</button>
+      </div>
+
+      <button type="submit" class="text-btn primary" id="save-habit">Save</button>
+      <button type="button" class="text-btn danger" id="delete-habit" hidden>Delete habit</button>
+    </form>
+  </main>
+
+  <script src="app.js"></script>
+</body>
+</html>
