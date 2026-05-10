@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Trace app icon.
+  A single capital "T" in white on a pure black square.
+  Built from two rectangles (the crossbar and the stem) for an
+  architectural, light-weight, geometric feel.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <!-- Background -->
+  <rect width="512" height="512" fill="#000000"/>
+  <!-- Crossbar of the T -->
+  <rect x="112" y="148" width="288" height="36" fill="#FFFFFF"/>
+  <!-- Stem of the T -->
+  <rect x="238" y="148" width="36" height="252" fill="#FFFFFF"/>
+</svg>

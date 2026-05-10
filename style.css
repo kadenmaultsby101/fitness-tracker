@@ -1,0 +1,339 @@
+/* ============================================================
+   Trace — minimalist habit tracker
+   Palette (the entire palette):
+     #000000  background
+     #FFFFFF  primary text + active marks
+     #6B6B6B  muted text (streaks, dates, section labels)
+     #1A1A1A  hairline divider
+   ------------------------------------------------------------ */
+
+:root {
+  --bg: #000000;
+  --fg: #FFFFFF;
+  --muted: #6B6B6B;
+  --rule: #1A1A1A;
+
+  /* Tuned for a 375px viewport. Generous so the layout breathes. */
+  --pad-x: 24px;
+  --section-gap: 40px;
+  --row-min: 56px;
+  --tap-min: 44px;
+
+  --tracking-lg: 0.2em;
+  --tracking-md: 0.15em;
+}
+
+/* -------- Reset (kept tiny; no normalize.css) -------- */
+*, *::before, *::after { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; }
+button { font: inherit; color: inherit; background: none; border: 0; padding: 0; cursor: pointer; }
+input { font: inherit; color: inherit; }
+a { color: inherit; text-decoration: none; }
+ul, ol { list-style: none; margin: 0; padding: 0; }
+
+html, body {
+  background: var(--bg);
+  color: var(--fg);
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Inter", sans-serif;
+  font-weight: 400;
+  font-size: 16px;
+  line-height: 1.4;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  /* Disable text size adjust so the design holds on iOS rotation. */
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  min-height: 100vh;
+  /* Respect iOS safe areas (notch, home indicator). */
+  padding:
+    env(safe-area-inset-top, 0)
+    env(safe-area-inset-right, 0)
+    env(safe-area-inset-bottom, 0)
+    env(safe-area-inset-left, 0);
+}
+
+/* No hover states — this is a touch-first app. We still suppress
+   the default tap highlight on iOS so taps feel deliberate. */
+* { -webkit-tap-highlight-color: transparent; }
+
+/* -------- Screen container -------- */
+.screen {
+  max-width: 480px;
+  margin: 0 auto;
+  padding: 0 var(--pad-x) 96px; /* lots of empty space at the bottom */
+}
+.screen[hidden] { display: none; }
+
+/* -------- Header (logo + gear / back + title) -------- */
+.app-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 24px 0 32px;
+}
+.app-header .logo {
+  display: inline-flex;
+  align-items: center;
+  color: var(--fg);
+  min-width: var(--tap-min);
+  min-height: var(--tap-min);
+}
+.icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--tap-min);
+  height: var(--tap-min);
+  color: var(--fg);
+}
+.icon-btn.placeholder { visibility: hidden; }
+
+.screen-title {
+  margin: 0;
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: var(--tracking-lg);
+  text-transform: uppercase;
+  color: var(--fg);
+}
+
+/* -------- Date line -------- */
+.date-line {
+  margin: 0 0 32px;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: var(--tracking-lg);
+  text-transform: uppercase;
+}
+
+/* -------- Completion hero -------- */
+.completion {
+  margin: 0 0 56px;
+  line-height: 1;
+}
+.completion-done {
+  font-size: 72px;
+  font-weight: 300;
+  letter-spacing: -0.02em;
+}
+.completion-total {
+  margin-left: 10px;
+  color: var(--muted);
+  font-size: 18px;
+  font-weight: 400;
+}
+
+/* -------- Time-of-day section -------- */
+.time-section { margin-bottom: var(--section-gap); }
+.section-label {
+  margin: 0 0 16px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--rule);
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: var(--tracking-lg);
+  text-transform: uppercase;
+}
+
+/* -------- Habit row (home screen) -------- */
+.habit-row {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  min-height: var(--row-min);
+  padding: 8px 0;
+  border-bottom: 1px solid var(--rule);
+  width: 100%;
+  text-align: left;
+}
+.habit-row:last-child { border-bottom: 0; }
+
+.habit-name {
+  flex: 1 1 auto;
+  font-size: 16px;
+  font-weight: 400;
+  color: var(--fg);
+  /* 200ms transition for the color shift when a habit is checked. */
+  transition: color 200ms ease;
+}
+.habit-row.is-done .habit-name { color: var(--muted); }
+
+.habit-streak {
+  flex: 0 0 auto;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 400;
+  /* Tabular numerals so single/double-digit streaks align visually. */
+  font-variant-numeric: tabular-nums;
+}
+
+/* -------- Check circle -------- */
+.check {
+  flex: 0 0 22px;
+  width: 22px;
+  height: 22px;
+  position: relative;
+}
+.check svg { display: block; width: 100%; height: 100%; overflow: visible; }
+.check .ring {
+  fill: transparent;
+  stroke: var(--fg);
+  stroke-width: 1.5;
+  transition: fill 200ms ease;
+}
+.check .tick {
+  fill: none;
+  stroke: var(--bg);
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  /* Animated draw-in via stroke-dashoffset (length 14 covers the path). */
+  stroke-dasharray: 14;
+  stroke-dashoffset: 14;
+  transition: stroke-dashoffset 200ms ease 60ms;
+}
+.habit-row.is-done .check .ring  { fill: var(--fg); }
+.habit-row.is-done .check .tick  { stroke-dashoffset: 0; }
+
+/* -------- Manage list (habits screen) -------- */
+.manage-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  min-height: var(--row-min);
+  padding: 8px 0;
+  border-bottom: 1px solid var(--rule);
+  width: 100%;
+  text-align: left;
+}
+.manage-row:last-child { border-bottom: 0; }
+.manage-row .habit-name { color: var(--fg); }
+.manage-row .time-tag {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: var(--tracking-md);
+  text-transform: uppercase;
+}
+
+/* -------- Text buttons -------- */
+.text-btn {
+  display: block;
+  width: 100%;
+  min-height: var(--tap-min);
+  padding: 20px 0;
+  margin-top: 24px;
+  color: var(--fg);
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: var(--tracking-lg);
+  text-transform: uppercase;
+  text-align: center;
+  border-top: 1px solid var(--rule);
+}
+.text-btn.primary { border-top: 0; }
+.text-btn.danger { color: var(--muted); border-top: 0; margin-top: 8px; }
+.add-habit { margin-top: 8px; }
+
+/* -------- Edit form -------- */
+.edit-form { padding-top: 8px; }
+.field-label {
+  margin: 24px 0 12px;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: var(--tracking-lg);
+  text-transform: uppercase;
+}
+.field-label:first-child { margin-top: 0; }
+
+.text-input {
+  display: block;
+  width: 100%;
+  padding: 12px 0;
+  background: transparent;
+  border: 0;
+  border-bottom: 1px solid var(--fg);
+  color: var(--fg);
+  font-size: 18px;
+  font-weight: 300;
+  outline: none;
+  border-radius: 0; /* iOS sometimes rounds inputs — explicitly square. */
+}
+.text-input::placeholder { color: var(--muted); }
+
+/* Segmented control — a row of three flat buttons divided by hairlines.
+   The active segment fills white with black text. No rounded corners. */
+.segmented {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  border: 1px solid var(--rule);
+}
+.seg {
+  min-height: var(--tap-min);
+  padding: 12px 4px;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: var(--tracking-md);
+  text-transform: uppercase;
+  border-right: 1px solid var(--rule);
+  transition: background 200ms ease, color 200ms ease;
+}
+.seg:last-child { border-right: 0; }
+.seg.is-active { background: var(--fg); color: var(--bg); }
+
+/* -------- Settings -------- */
+.settings {
+  margin-top: 56px;
+  padding-top: 24px;
+  border-top: 1px solid var(--rule);
+}
+.settings-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: var(--tap-min);
+  padding: 8px 0;
+}
+.settings-label {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: var(--tracking-lg);
+  text-transform: uppercase;
+}
+
+/* Toggle — hairline pill, white thumb that slides 200ms. */
+.toggle { position: relative; display: inline-block; width: 44px; height: 24px; }
+.toggle input { position: absolute; opacity: 0; inset: 0; margin: 0; cursor: pointer; }
+.toggle-track {
+  display: block;
+  width: 100%; height: 100%;
+  border: 1px solid var(--rule);
+  position: relative;
+}
+.toggle-thumb {
+  position: absolute;
+  top: 3px; left: 3px;
+  width: 16px; height: 16px;
+  background: var(--muted);
+  transition: left 200ms ease, background 200ms ease;
+}
+.toggle input:checked + .toggle-track { border-color: var(--fg); }
+.toggle input:checked + .toggle-track .toggle-thumb {
+  left: 23px;
+  background: var(--fg);
+}
+
+/* -------- Misc -------- */
+.empty-note {
+  padding: 12px 0;
+  color: var(--muted);
+  font-size: 13px;
+}
