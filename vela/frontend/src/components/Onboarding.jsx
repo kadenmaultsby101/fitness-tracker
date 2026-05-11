@@ -110,75 +110,86 @@ export default function Onboarding({ session, onDone }) {
   const finishOnboarding = async () => {
     if (busy) return;
     setBusy(true);
-    setFinishing(true);
     setError('');
 
     const my = currentMonthYear();
 
-    const profileUpdate = {
-      onboarding_completed_at: new Date().toISOString(),
-      onboarding_data: {
-        age: numericAge || null,
-        situations,
-        discovered_via: discovery || null,
-        motivations,
-        goal_interests: goalIds,
-      },
-    };
-    if (numericIncome > 0) profileUpdate.monthly_income = numericIncome;
+    try {
+      // 1. Critical write: mark onboarding done + save income (definitely
+      //    existing columns). This is what gates the routing in App.jsx.
+      const baseUpdate = { onboarding_completed_at: new Date().toISOString() };
+      if (numericIncome > 0) baseUpdate.monthly_income = numericIncome;
 
-    const { error: pe } = await supabase
-      .from('profiles')
-      .update(profileUpdate)
-      .eq('id', userId);
-    if (pe) {
+      const { error: pe } = await supabase
+        .from('profiles')
+        .update(baseUpdate)
+        .eq('id', userId);
+      if (pe) throw pe;
+
+      // 2. Nice-to-have: personalization payload. Lives in the
+      //    onboarding_data jsonb column. If migration 03 hasn't been run
+      //    yet, this update fails with 'column does not exist' — we
+      //    swallow that specific case so the user can still get into the
+      //    app and the data only gets lost, not the whole flow.
+      try {
+        const personalization = {
+          age: numericAge || null,
+          situations,
+          discovered_via: discovery || null,
+          motivations,
+          goal_interests: goalIds,
+        };
+        const { error: oe } = await supabase
+          .from('profiles')
+          .update({ onboarding_data: personalization })
+          .eq('id', userId);
+        if (oe) console.warn('[vela] onboarding_data write skipped:', oe.message);
+      } catch (oe) {
+        console.warn('[vela] onboarding_data write threw:', oe?.message || oe);
+      }
+
+      // 3. Budget rows the user actually filled in.
+      const budgetRows = DEFAULT_CATEGORIES
+        .map((c) => {
+          const raw = budgets[c.key];
+          const v = Number(String(raw ?? '').replace(/[^0-9.]/g, ''));
+          return { category: c.key, monthly_limit: Number.isFinite(v) && v > 0 ? v : 0 };
+        })
+        .filter((r) => r.monthly_limit > 0)
+        .map((r) => ({ user_id: userId, month_year: my, ...r }));
+      if (budgetRows.length > 0) {
+        const { error: be } = await supabase
+          .from('budgets')
+          .upsert(budgetRows, { onConflict: 'user_id,category,month_year' });
+        if (be) throw be;
+      }
+
+      // 4. Auto-create goals from selected interests.
+      const goalRows = GOAL_INTERESTS
+        .filter((g) => goalIds.includes(g.id))
+        .map((g) => ({
+          user_id: userId,
+          name: g.label,
+          emoji: g.emoji,
+          description: g.description,
+          current_amount: 0,
+          target_amount: g.target,
+          monthly_contribution: g.monthly,
+        }));
+      if (goalRows.length > 0) {
+        const { error: ge } = await supabase.from('goals').insert(goalRows);
+        if (ge) throw ge;
+      }
+
+      // Smooth handoff: brief celebration frame, then call onDone.
+      setFinishing(true);
+      setTimeout(() => onDone(), 600);
+    } catch (err) {
+      console.error('[vela] finishOnboarding failed', err);
+      setError(err?.message || String(err) || 'Something went wrong.');
+    } finally {
       setBusy(false);
-      setFinishing(false);
-      return setError(pe.message);
     }
-
-    const budgetRows = DEFAULT_CATEGORIES
-      .map((c) => {
-        const raw = budgets[c.key];
-        const v = Number(String(raw ?? '').replace(/[^0-9.]/g, ''));
-        return { category: c.key, monthly_limit: Number.isFinite(v) && v > 0 ? v : 0 };
-      })
-      .filter((r) => r.monthly_limit > 0)
-      .map((r) => ({ user_id: userId, month_year: my, ...r }));
-    if (budgetRows.length > 0) {
-      const { error: be } = await supabase
-        .from('budgets')
-        .upsert(budgetRows, { onConflict: 'user_id,category,month_year' });
-      if (be) {
-        setBusy(false);
-        setFinishing(false);
-        return setError(be.message);
-      }
-    }
-
-    const goalRows = GOAL_INTERESTS
-      .filter((g) => goalIds.includes(g.id))
-      .map((g) => ({
-        user_id: userId,
-        name: g.label,
-        emoji: g.emoji,
-        description: g.description,
-        current_amount: 0,
-        target_amount: g.target,
-        monthly_contribution: g.monthly,
-      }));
-    if (goalRows.length > 0) {
-      const { error: ge } = await supabase.from('goals').insert(goalRows);
-      if (ge) {
-        setBusy(false);
-        setFinishing(false);
-        return setError(ge.message);
-      }
-    }
-
-    // Smooth handoff: brief celebration frame, then call onDone.
-    setBusy(false);
-    setTimeout(() => onDone(), 600);
   };
 
   const skipAll = () => finishOnboarding();
