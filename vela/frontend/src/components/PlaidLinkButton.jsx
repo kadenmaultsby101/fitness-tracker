@@ -92,6 +92,17 @@ export default function PlaidLinkButton({ onConnected, variant = 'primary' }) {
       >
         {label}
       </button>
+      {!linkToken && !error && (
+        <div style={{
+          fontSize: 9,
+          letterSpacing: 1.5,
+          color: 'var(--t3)',
+          textAlign: 'center',
+          lineHeight: 1.5,
+        }}>
+          Waking the backend up — first use of the day takes 30–50 sec.
+        </div>
+      )}
     </div>
   );
 }
