@@ -543,6 +543,17 @@
       window.addEventListener('load', () => {
         navigator.serviceWorker.register('service-worker.js').catch(() => {});
       });
+
+      // When a freshly installed service worker takes control, reload once
+      // so the page is guaranteed to be running the new code. The one-shot
+      // guard prevents reload loops if `controllerchange` fires twice
+      // (which it can on some browsers during the first install).
+      let swReloaded = false;
+      navigator.serviceWorker.addEventListener('controllerchange', () => {
+        if (swReloaded) return;
+        swReloaded = true;
+        window.location.reload();
+      });
     }
   }
 

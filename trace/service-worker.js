@@ -1,14 +1,18 @@
 /*
  * Trace — service worker
  * ----------------------
- * Tiny offline cache. On install we pre-cache the app shell so the
- * page works with no network after the first visit. On fetch we use
- * a "cache-first, network-fallback" strategy for same-origin GETs.
+ * Caching strategy:
+ *   - App shell (HTML / CSS / JS / manifest): network-first with cache
+ *     fallback. This means a new deploy is visible within ~1 second
+ *     instead of being pinned to whatever was cached at install time.
+ *   - Icons + everything else: cache-first. They rarely change and are
+ *     a few hundred bytes, so the cache hit keeps cold launch fast.
  *
- * Bump CACHE_VERSION whenever any of the shell files change so the
- * old cache is dropped and clients get the fresh build.
+ * Bump CACHE_VERSION whenever you want to drop everything in the
+ * existing cache and start fresh. The activate handler below deletes
+ * any cache whose key doesn't match the current version.
  */
-const CACHE_VERSION = 'trace-v1';
+const CACHE_VERSION = 'trace-v2';
 const SHELL = [
   './',
   './index.html',
@@ -20,12 +24,19 @@ const SHELL = [
   './icon-512.png',
 ];
 
+// Files we want to keep fresh on every visit. Matched by extension so
+// the routing logic stays small.
+const NETWORK_FIRST_EXTS = ['.html', '.css', '.js', '.json'];
+const isNetworkFirst = (url) => {
+  if (url.pathname === '/' || url.pathname.endsWith('/')) return true;
+  return NETWORK_FIRST_EXTS.some((ext) => url.pathname.endsWith(ext));
+};
+
 self.addEventListener('install', (event) => {
   event.waitUntil(
     caches.open(CACHE_VERSION).then((cache) => cache.addAll(SHELL))
   );
-  // Activate this SW immediately on next load rather than waiting
-  // for all clients of the old SW to close.
+  // Take over immediately rather than waiting for old clients to close.
   self.skipWaiting();
 });
 
@@ -43,16 +54,39 @@ self.addEventListener('fetch', (event) => {
   const url = new URL(req.url);
   if (url.origin !== self.location.origin) return;
 
-  event.respondWith(
-    caches.match(req).then((cached) => {
-      if (cached) return cached;
-      return fetch(req).then((res) => {
-        // Only cache successful, basic responses (skip opaque / errored).
-        if (!res || res.status !== 200 || res.type !== 'basic') return res;
-        const copy = res.clone();
-        caches.open(CACHE_VERSION).then((cache) => cache.put(req, copy));
-        return res;
-      }).catch(() => cached);
-    })
-  );
+  if (isNetworkFirst(url)) {
+    event.respondWith(networkFirst(req));
+  } else {
+    event.respondWith(cacheFirst(req));
+  }
 });
+
+// Try the network, refresh the cache on success, fall back to cache
+// on failure. Used for the app shell so deploys propagate immediately.
+async function networkFirst(req) {
+  try {
+    const res = await fetch(req);
+    if (res && res.status === 200 && res.type === 'basic') {
+      const copy = res.clone();
+      caches.open(CACHE_VERSION).then((cache) => cache.put(req, copy));
+    }
+    return res;
+  } catch (err) {
+    const cached = await caches.match(req);
+    if (cached) return cached;
+    throw err;
+  }
+}
+
+// Cached copy first, network only on miss. Used for icons and any
+// other static asset that rarely changes.
+async function cacheFirst(req) {
+  const cached = await caches.match(req);
+  if (cached) return cached;
+  const res = await fetch(req);
+  if (res && res.status === 200 && res.type === 'basic') {
+    const copy = res.clone();
+    caches.open(CACHE_VERSION).then((cache) => cache.put(req, copy));
+  }
+  return res;
+}
