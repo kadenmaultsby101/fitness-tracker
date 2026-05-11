@@ -37,22 +37,30 @@ export default function AddTransactionModal({ accounts, onClose, onSaved, onSwit
       const ts = Date.now();
       const random = Math.random().toString(36).slice(2, 10);
 
-      const { error: e } = await withTimeout(
-        supabase.from('transactions').insert({
-          user_id: userId,
-          account_id: accountId,
-          plaid_transaction_id: `manual_${userId.slice(0, 8)}_${ts}_${random}`,
-          name: name.trim(),
-          merchant_name: name.trim(),
-          amount: signedAmount,
-          category: direction === 'income' ? 'Income' : category,
-          subcategory: 'manual',
-          date,
-          pending: false,
-        }),
+      const payload = {
+        user_id: userId,
+        account_id: accountId,
+        plaid_transaction_id: `manual_${userId.slice(0, 8)}_${ts}_${random}`,
+        name: name.trim(),
+        merchant_name: name.trim(),
+        amount: signedAmount,
+        category: direction === 'income' ? 'Income' : category,
+        subcategory: 'manual',
+        date,
+        pending: false,
+      };
+      console.info('[vela] AddTransactionModal save: sending', payload);
+
+      const { data: returned, error: e } = await withTimeout(
+        supabase.from('transactions').insert(payload).select(),
         8000
       );
+      console.info('[vela] AddTransactionModal save: response', { returned, error: e });
+
       if (e) throw e;
+      if (!returned || returned.length === 0) {
+        throw new Error('Insert returned no row — RLS or auth mismatch.');
+      }
       onSaved();
     } catch (err) {
       setError(err?.message || 'Save failed. Try again.');
