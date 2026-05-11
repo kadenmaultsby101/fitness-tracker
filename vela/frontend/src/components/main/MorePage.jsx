@@ -24,6 +24,60 @@ export default function MorePage({ data, session, onSignOut }) {
     two_factor_enabled: profile?.two_factor_enabled ?? false,
   });
 
+  // Account-delete state machine: 'idle' | 'confirm' | 'deleting'
+  const [deleteState, setDeleteState] = useState('idle');
+  const [deleteConfirmText, setDeleteConfirmText] = useState('');
+  const [deleteError, setDeleteError] = useState('');
+
+  const initiateDelete = () => {
+    setDeleteState('confirm');
+    setDeleteConfirmText('');
+    setDeleteError('');
+  };
+  const cancelDelete = () => {
+    setDeleteState('idle');
+    setDeleteConfirmText('');
+    setDeleteError('');
+  };
+  const confirmDelete = async () => {
+    if (deleteConfirmText.trim().toUpperCase() !== 'DELETE') {
+      return setDeleteError('Type DELETE exactly to confirm.');
+    }
+    if (!API) {
+      return setDeleteError('Backend not deployed yet. Try again later.');
+    }
+    setDeleteState('deleting');
+    setDeleteError('');
+    try {
+      const { data: sess } = await supabase.auth.getSession();
+      const token = sess.session?.access_token;
+      if (!token) throw new Error('Not signed in.');
+
+      const res = await fetch(`${API}/api/account`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(body.error || `HTTP ${res.status}`);
+
+      // Clean up local "I'm onboarded" flag for the deleted user so the
+      // next sign-up from this browser doesn't skip onboarding.
+      try {
+        const userId = sess.session?.user?.id;
+        if (userId) localStorage.removeItem(`vela:onboarded:${userId}`);
+      } catch { /* ignore */ }
+
+      // Sign out (clears the auth token from localStorage) then reload
+      // back to the auth screen.
+      await supabase.auth.signOut();
+      window.location.replace('/');
+    } catch (err) {
+      console.error('[account-delete]', err);
+      setDeleteError(err?.message || 'Delete failed. Try again.');
+      setDeleteState('confirm');
+    }
+  };
+
   // Sync local toggle state if the profile finishes loading after mount,
   // or refreshes from elsewhere in the app.
   useEffect(() => {
@@ -195,6 +249,66 @@ export default function MorePage({ data, session, onSignOut }) {
               </div>
             </div>
           ))
+        )}
+      </div>
+
+      <div className="card" style={{ borderColor: 'rgba(235,159,159,0.25)' }}>
+        <div className="ctitle" style={{ color: 'var(--red)' }}>Danger Zone</div>
+
+        {deleteState === 'idle' && (
+          <>
+            <div style={{ fontSize: 11, color: 'var(--t2)', lineHeight: 1.7, marginBottom: 14 }}>
+              Deleting your account is <strong style={{ color: 'var(--red)' }}>permanent</strong>.
+              Every account, transaction, goal, budget, and chat message tied
+              to <strong style={{ color: 'var(--t1)' }}>{session?.user?.email}</strong> will be
+              removed from Vela's database. This cannot be undone.
+            </div>
+            <button type="button" className="bdel" style={{ width: '100%' }} onClick={initiateDelete}>
+              Delete account permanently
+            </button>
+          </>
+        )}
+
+        {deleteState === 'confirm' && (
+          <>
+            <div className="mnote" style={{ borderColor: 'rgba(235,159,159,0.30)', marginBottom: 12 }}>
+              Type <strong>DELETE</strong> below to confirm. No undo, no recovery.
+            </div>
+            <input
+              className="finp"
+              type="text"
+              value={deleteConfirmText}
+              onChange={(e) => setDeleteConfirmText(e.target.value)}
+              placeholder="DELETE"
+              autoFocus
+              style={{ marginBottom: 6 }}
+            />
+            {deleteError && <div className="merr" style={{ marginTop: 8 }}>{deleteError}</div>}
+            <div className="mbtns">
+              <button type="button" className="bsec" onClick={cancelDelete}>Cancel</button>
+              <button
+                type="button"
+                className="bdel"
+                style={{ flex: 1, marginTop: 0 }}
+                onClick={confirmDelete}
+              >
+                Permanently delete
+              </button>
+            </div>
+          </>
+        )}
+
+        {deleteState === 'deleting' && (
+          <div style={{
+            fontSize: 11,
+            letterSpacing: 2,
+            textTransform: 'uppercase',
+            color: 'var(--t3)',
+            textAlign: 'center',
+            padding: '10px 0',
+          }}>
+            Deleting your account…
+          </div>
         )}
       </div>
 

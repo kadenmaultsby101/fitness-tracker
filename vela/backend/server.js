@@ -70,6 +70,7 @@ app.use(
       if (/\.vercel\.app$/.test(new URL(origin).hostname)) return cb(null, true);
       return cb(new Error(`CORS: origin ${origin} not allowed`));
     },
+    methods: ['GET', 'POST', 'DELETE', 'OPTIONS'],
     credentials: false,
   })
 );
@@ -98,6 +99,30 @@ app.get('/', (_req, res) => {
     has_supabase: Boolean(SUPABASE_URL && SUPABASE_SERVICE_KEY),
     has_anthropic: Boolean(ANTHROPIC_API_KEY),
   });
+});
+
+// ─── ACCOUNT DELETION ───────────────────────────────────────────────────────
+// DELETE /api/account
+// Permanently deletes the signed-in user and ALL their data. Every Vela
+// table has `user_id` references auth.users with ON DELETE CASCADE, so
+// deleting the auth.users row removes profile, accounts, transactions,
+// goals, budgets, plaid_items, chat_messages, and insights_cache in one
+// transaction. App Store requires this — users must be able to delete
+// their account from inside the app.
+app.delete('/api/account', async (req, res) => {
+  try {
+    const user = await getUser(req);
+    if (!user) return res.status(401).json({ error: 'unauthorized' });
+
+    const { error } = await supabase.auth.admin.deleteUser(user.id);
+    if (error) throw error;
+
+    console.info('[account-delete] deleted user', user.id);
+    res.json({ success: true });
+  } catch (err) {
+    console.error('[account-delete] failed', err);
+    res.status(500).json({ error: err?.message || 'Failed to delete account.' });
+  }
 });
 
 // ─── HELPERS ────────────────────────────────────────────────────────────────
