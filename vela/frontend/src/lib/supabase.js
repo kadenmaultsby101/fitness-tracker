@@ -9,10 +9,15 @@ if (!url || !key) {
   );
 }
 
+// detectSessionInUrl: true is REQUIRED for email-confirmation links to log
+// users in. When the user clicks the link in their confirmation email,
+// they land back on the app with the access+refresh tokens in the URL
+// fragment; the client extracts and persists them automatically.
 export const supabase = createClient(url, key, {
   auth: {
     persistSession: true,
     autoRefreshToken: true,
-    detectSessionInUrl: false,
+    detectSessionInUrl: true,
+    flowType: 'implicit',
   },
 });
