@@ -2,6 +2,7 @@ import { useEffect, useState, useCallback } from 'react';
 import { supabase } from './lib/supabase';
 import AuthScreen from './components/AuthScreen';
 import Onboarding from './components/Onboarding';
+import MainApp from './components/main/MainApp';
 
 export default function App() {
   const [session, setSession] = useState(null);
@@ -49,20 +50,11 @@ export default function App() {
   }, [loadProfile]);
 
   if (loading) return <CenteredLabel text="Loading" />;
-
   if (!session) return <AuthScreen />;
-
-  // First-time users: profile may not be ready yet, or onboarding incomplete.
   if (!profile || !profile.onboarding_completed_at) {
-    return (
-      <Onboarding
-        session={session}
-        onDone={() => loadProfile(session)}
-      />
-    );
+    return <Onboarding session={session} onDone={() => loadProfile(session)} />;
   }
-
-  return <SignedInPlaceholder session={session} profile={profile} />;
+  return <MainApp session={session} />;
 }
 
 function CenteredLabel({ text }) {
@@ -80,83 +72,6 @@ function CenteredLabel({ text }) {
       textTransform: 'uppercase',
     }}>
       {text}
-    </div>
-  );
-}
-
-function SignedInPlaceholder({ session, profile }) {
-  const signOut = () => supabase.auth.signOut();
-  const name =
-    profile?.name ||
-    session.user?.user_metadata?.name ||
-    session.user?.email ||
-    'there';
-
-  return (
-    <div style={{
-      minHeight: '100vh',
-      background: 'var(--bg)',
-      color: 'var(--t1)',
-      fontFamily: 'var(--mono)',
-      display: 'flex',
-      flexDirection: 'column',
-      alignItems: 'center',
-      justifyContent: 'center',
-      padding: 28,
-      textAlign: 'center',
-    }}>
-      <div style={{
-        fontFamily: 'var(--serif)',
-        fontSize: 56,
-        fontWeight: 300,
-        letterSpacing: -2,
-        lineHeight: 1,
-      }}>
-        Vela
-      </div>
-      <div style={{
-        fontSize: 9,
-        letterSpacing: 3,
-        textTransform: 'uppercase',
-        color: 'var(--t3)',
-        marginTop: 12,
-        marginBottom: 36,
-      }}>
-        Signed in · Onboarded
-      </div>
-      <div style={{
-        background: 'var(--c1)',
-        border: '1px solid var(--b1)',
-        padding: '20px 24px',
-        maxWidth: 360,
-        width: '100%',
-        fontSize: 11,
-        lineHeight: 1.8,
-        color: 'var(--t2)',
-      }}>
-        Welcome back, <strong style={{ color: 'var(--t1)' }}>{name}</strong>.
-        <br /><br />
-        Auth + onboarding complete. The dashboard, Plaid connections, and
-        Sage land in the next phases.
-      </div>
-      <button
-        type="button"
-        onClick={signOut}
-        style={{
-          marginTop: 24,
-          background: 'transparent',
-          border: '1px solid var(--b2)',
-          color: 'var(--t2)',
-          padding: '11px 22px',
-          fontFamily: 'var(--mono)',
-          fontSize: 10,
-          letterSpacing: 3,
-          textTransform: 'uppercase',
-          cursor: 'pointer',
-        }}
-      >
-        Sign Out
-      </button>
     </div>
   );
 }

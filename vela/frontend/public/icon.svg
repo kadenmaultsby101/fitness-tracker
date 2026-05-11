@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <rect width="512" height="512" fill="#070707"/>
+  <text
+    x="50%"
+    y="58%"
+    text-anchor="middle"
+    fill="#f0f0f0"
+    font-family="Cormorant Garamond, Georgia, serif"
+    font-size="340"
+    font-weight="300"
+    letter-spacing="-12"
+  >V</text>
+</svg>
