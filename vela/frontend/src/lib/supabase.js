@@ -12,7 +12,13 @@ if (typeof window !== 'undefined') {
     has_url: Boolean(url),
     url_prefix: url ? url.slice(0, 40) + '…' : null,
     has_key: Boolean(key),
-    key_format: key ? (key.startsWith('sb_publishable_') ? 'new-publishable' : key.startsWith('eyJ') ? 'legacy-jwt' : 'unknown') : null,
+    key_format: key
+      ? (key.startsWith('sb_publishable_')
+          ? 'new-publishable'
+          : key.startsWith('eyJ')
+            ? 'legacy-jwt'
+            : 'unknown')
+      : null,
   });
 }
 
@@ -22,14 +28,19 @@ if (!url || !key) {
   );
 }
 
-// Default flowType (pkce) + detectSessionInUrl true is the right combo for
-// email/password + email confirmation links. Don't override unless you have
-// a specific reason — PR #14's flowType: 'implicit' broke session restore
-// for tokens issued under the default flow.
+// Supabase JS v2 uses Web Locks API for cross-tab session sync by default.
+// Multiple users have reported it deadlocking or hanging — symptom is
+// auth.getSession() never resolving, which matches what we saw in
+// production. Passing a no-op lock disables the cross-tab sync (acceptable
+// for a personal app) and guarantees getSession() returns promptly.
+const noopLock = async (_name, _acquireTimeout, fn) => fn();
+
 export const supabase = createClient(url, key, {
   auth: {
     persistSession: true,
     autoRefreshToken: true,
     detectSessionInUrl: true,
+    lock: noopLock,
+    storage: typeof window !== 'undefined' ? window.localStorage : undefined,
   },
 });
