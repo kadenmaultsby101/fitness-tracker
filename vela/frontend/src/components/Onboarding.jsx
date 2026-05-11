@@ -114,6 +114,17 @@ export default function Onboarding({ session, onDone }) {
 
     const my = currentMonthYear();
 
+    // Hard failsafe: if Supabase writes hang for any reason (slow network,
+    // wrong env var, server outage), force the user past onboarding after
+    // FINISH_TIMEOUT_MS so they never get trapped on 'Saving…'. They land
+    // on MainApp; whatever didn't persist can be re-entered manually later.
+    const failsafe = setTimeout(() => {
+      console.warn('[vela] finish timeout — forcing handoff into the app');
+      setBusy(false);
+      setFinishing(true);
+      setTimeout(() => onDone(), 400);
+    }, 10000);
+
     try {
       // 1. Critical write: mark onboarding done + save income (definitely
       //    existing columns). This is what gates the routing in App.jsx.
@@ -182,9 +193,11 @@ export default function Onboarding({ session, onDone }) {
       }
 
       // Smooth handoff: brief celebration frame, then call onDone.
+      clearTimeout(failsafe);
       setFinishing(true);
       setTimeout(() => onDone(), 600);
     } catch (err) {
+      clearTimeout(failsafe);
       console.error('[vela] finishOnboarding failed', err);
       setError(err?.message || String(err) || 'Something went wrong.');
     } finally {
