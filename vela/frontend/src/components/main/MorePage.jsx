@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { supabase } from '../../lib/supabase';
 import { money } from './format';
 import PlaidLinkButton from '../PlaidLinkButton';
@@ -23,6 +23,18 @@ export default function MorePage({ data, session, onSignOut }) {
     notify_ai_insights: profile?.notify_ai_insights ?? true,
     two_factor_enabled: profile?.two_factor_enabled ?? false,
   });
+
+  // Sync local toggle state if the profile finishes loading after mount,
+  // or refreshes from elsewhere in the app.
+  useEffect(() => {
+    if (!profile) return;
+    setToggles({
+      notify_transactions:   profile.notify_transactions   ?? true,
+      notify_weekly_summary: profile.notify_weekly_summary ?? true,
+      notify_ai_insights:    profile.notify_ai_insights    ?? true,
+      two_factor_enabled:    profile.two_factor_enabled    ?? false,
+    });
+  }, [profile]);
 
   const handleSync = async () => {
     if (!API) return setSyncMsg('Backend not deployed yet.');
