@@ -40,6 +40,8 @@ export default function MainApp({ session }) {
         session={session}
         onAddTxn={() => setModal('txn')}
         onAddAccount={() => setModal('account')}
+        onEditAccount={(a) => setModal({ kind: 'editAccount', account: a })}
+        onEditTxn={(t) => setModal({ kind: 'editTxn', txn: t })}
         onGoTo={setPage}
       />
     );
@@ -49,6 +51,7 @@ export default function MainApp({ session }) {
         data={data}
         onEditBudgets={() => setModal('budget')}
         onAddTxn={() => setModal('txn')}
+        onEditTxn={(t) => setModal({ kind: 'editTxn', txn: t })}
       />
     );
   } else if (page === 'goals') {
@@ -101,8 +104,23 @@ export default function MainApp({ session }) {
           onSwitchToAddAccount={() => setModal('account')}
         />
       )}
+      {modal?.kind === 'editTxn' && (
+        <AddTransactionModal
+          transaction={modal.txn}
+          accounts={data.accounts}
+          onClose={closeModal}
+          onSaved={() => { closeModal(); data.refresh(); }}
+        />
+      )}
       {modal === 'account' && (
         <AddAccountModal
+          onClose={closeModal}
+          onSaved={() => { closeModal(); data.refresh(); }}
+        />
+      )}
+      {modal?.kind === 'editAccount' && (
+        <AddAccountModal
+          account={modal.account}
           onClose={closeModal}
           onSaved={() => { closeModal(); data.refresh(); }}
         />

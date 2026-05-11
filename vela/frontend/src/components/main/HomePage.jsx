@@ -13,7 +13,7 @@ function setupSteps({ accounts, transactions, goals, budgets, plaidConnected }) 
   ];
 }
 
-export default function HomePage({ data, session, onAddTxn, onAddAccount, onGoTo }) {
+export default function HomePage({ data, session, onAddTxn, onAddAccount, onEditAccount, onEditTxn, onGoTo }) {
   const { profile, accounts, transactions, goals, budgets, derived, loading } = data;
   const firstName =
     (profile?.name || session?.user?.user_metadata?.name || '').split(' ')[0] ||
@@ -179,7 +179,14 @@ export default function HomePage({ data, session, onAddTxn, onAddAccount, onGoTo
       ) : (
         <div className="acc-scr">
           {accounts.map((a) => (
-            <div key={a.id} className="am">
+            <div
+              key={a.id}
+              className="am"
+              onClick={() => onEditAccount?.(a)}
+              role="button"
+              tabIndex={0}
+              style={{ cursor: onEditAccount ? 'pointer' : 'default' }}
+            >
               <div className="am-inst">{a.subtype || a.type}</div>
               <div className="am-nm">
                 {displayAccountName(a)}
@@ -205,7 +212,14 @@ export default function HomePage({ data, session, onAddTxn, onAddAccount, onGoTo
           </div>
         ) : (
           recent.map((t) => (
-            <div key={t.id} className="txn">
+            <div
+              key={t.id}
+              className="txn"
+              onClick={() => onEditTxn?.(t)}
+              role="button"
+              tabIndex={0}
+              style={{ cursor: onEditTxn ? 'pointer' : 'default' }}
+            >
               <div className="txn-em">{emojiFor(t.category, t.subcategory)}</div>
               <div className="txn-bd">
                 <div className="txn-nm">{t.merchant_name || t.name}</div>
