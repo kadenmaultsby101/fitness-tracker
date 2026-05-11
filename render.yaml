@@ -1,0 +1,34 @@
+# Render blueprint for the Vela backend.
+# Lets the user provision the web service via a single "Deploy to Render"
+# button instead of clicking through 8 form fields. Env vars marked
+# `sync: false` are filled in by the user during provisioning and never
+# leave their Render dashboard.
+
+services:
+  - type: web
+    name: vela-backend
+    runtime: node
+    region: oregon
+    rootDir: vela/backend
+    buildCommand: npm install
+    startCommand: npm start
+    plan: free
+    healthCheckPath: /
+    autoDeploy: true
+    envVars:
+      - key: PORT
+        value: "10000"
+      - key: PLAID_ENV
+        value: sandbox
+      - key: PLAID_CLIENT_ID
+        sync: false
+      - key: PLAID_SECRET
+        sync: false
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_SERVICE_KEY
+        sync: false
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      - key: CORS_ORIGINS
+        sync: false
