@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { supabase } from '../../lib/supabase';
+import { withTimeout } from '../../lib/withTimeout';
 
 const TYPES = [
   { value: 'depository', label: 'Checking / Savings (Bank)' },
@@ -33,34 +34,38 @@ export default function AddAccountModal({ onClose, onSaved }) {
     setError('');
     if (!name.trim()) return setError('Account name is required.');
     const bal = Number(String(balance).replace(/[^0-9.-]/g, ''));
-    if (!Number.isFinite(bal)) return setError('Enter a current balance.');
+    if (!Number.isFinite(bal)) return setError('Enter a current balance (any number, including 0).');
 
     setBusy(true);
-    const { data: sess } = await supabase.auth.getSession();
-    const userId = sess.session?.user?.id;
-    if (!userId) {
+    try {
+      const { data: sess } = await withTimeout(supabase.auth.getSession(), 6000);
+      const userId = sess.session?.user?.id;
+      if (!userId) throw new Error('Not signed in.');
+
+      const ts = Date.now();
+      const random = Math.random().toString(36).slice(2, 10);
+
+      const { error: e } = await withTimeout(
+        supabase.from('accounts').insert({
+          user_id: userId,
+          plaid_account_id: `manual_${userId.slice(0, 8)}_${ts}_${random}`,
+          name: name.trim(),
+          type,
+          subtype,
+          balance_current: bal,
+          balance_available: type === 'credit' || type === 'loan' ? null : bal,
+          currency: 'USD',
+          mask: mask.trim() || null,
+        }),
+        8000
+      );
+      if (e) throw e;
+      onSaved();
+    } catch (err) {
+      setError(err?.message || 'Save failed. Try again.');
+    } finally {
       setBusy(false);
-      return setError('Not signed in.');
     }
-
-    const ts = Date.now();
-    const random = Math.random().toString(36).slice(2, 10);
-
-    const { error: e } = await supabase.from('accounts').insert({
-      user_id: userId,
-      plaid_account_id: `manual_${userId.slice(0, 8)}_${ts}_${random}`,
-      name: name.trim(),
-      type,
-      subtype,
-      balance_current: bal,
-      balance_available: type === 'credit' || type === 'loan' ? null : bal,
-      currency: 'USD',
-      mask: mask.trim() || null,
-    });
-
-    setBusy(false);
-    if (e) return setError(e.message);
-    onSaved();
   };
 
   return (

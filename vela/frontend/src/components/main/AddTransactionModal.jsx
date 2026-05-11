@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { supabase } from '../../lib/supabase';
+import { withTimeout } from '../../lib/withTimeout';
 import { displayAccountName } from './format';
 import { CATEGORIES } from '../../hooks/useFinancialData';
 
@@ -26,34 +27,38 @@ export default function AddTransactionModal({ accounts, onClose, onSaved, onSwit
     if (!accountId) return setError('Pick an account, or add one from Home first.');
 
     setBusy(true);
-    const { data: sess } = await supabase.auth.getSession();
-    const userId = sess.session?.user?.id;
-    if (!userId) {
+    try {
+      const { data: sess } = await withTimeout(supabase.auth.getSession(), 6000);
+      const userId = sess.session?.user?.id;
+      if (!userId) throw new Error('Not signed in.');
+
+      // Plaid convention: outflows positive, inflows negative.
+      const signedAmount = direction === 'income' ? -amt : amt;
+      const ts = Date.now();
+      const random = Math.random().toString(36).slice(2, 10);
+
+      const { error: e } = await withTimeout(
+        supabase.from('transactions').insert({
+          user_id: userId,
+          account_id: accountId,
+          plaid_transaction_id: `manual_${userId.slice(0, 8)}_${ts}_${random}`,
+          name: name.trim(),
+          merchant_name: name.trim(),
+          amount: signedAmount,
+          category: direction === 'income' ? 'Income' : category,
+          subcategory: 'manual',
+          date,
+          pending: false,
+        }),
+        8000
+      );
+      if (e) throw e;
+      onSaved();
+    } catch (err) {
+      setError(err?.message || 'Save failed. Try again.');
+    } finally {
       setBusy(false);
-      return setError('Not signed in.');
     }
-
-    // Plaid convention: outflows positive, inflows negative.
-    const signedAmount = direction === 'income' ? -amt : amt;
-    const ts = Date.now();
-    const random = Math.random().toString(36).slice(2, 10);
-
-    const { error: e } = await supabase.from('transactions').insert({
-      user_id: userId,
-      account_id: accountId,
-      plaid_transaction_id: `manual_${userId.slice(0, 8)}_${ts}_${random}`,
-      name: name.trim(),
-      merchant_name: name.trim(),
-      amount: signedAmount,
-      category: direction === 'income' ? 'Income' : category,
-      subcategory: 'manual',
-      date,
-      pending: false,
-    });
-
-    setBusy(false);
-    if (e) return setError(e.message);
-    onSaved();
   };
 
   if (accounts.length === 0) {

@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { supabase } from '../../lib/supabase';
+import { withTimeout } from '../../lib/withTimeout';
 
 const PRESETS = [
   { emoji: '🛡️', name: 'Emergency Fund' },
@@ -33,41 +34,51 @@ export default function GoalModal({ goal, onClose, onSaved }) {
     if (tgt <= 0) return setError('Target amount must be > 0.');
 
     setBusy(true);
-    const { data: sess } = await supabase.auth.getSession();
-    const userId = sess.session?.user?.id;
-    if (!userId) {
+    try {
+      const { data: sess } = await withTimeout(supabase.auth.getSession(), 6000);
+      const userId = sess.session?.user?.id;
+      if (!userId) throw new Error('Not signed in.');
+
+      const payload = {
+        user_id: userId,
+        name: name.trim(),
+        emoji,
+        description: description.trim() || null,
+        current_amount: num(current),
+        target_amount: tgt,
+        monthly_contribution: num(monthly),
+      };
+
+      const op = editing
+        ? supabase.from('goals').update(payload).eq('id', goal.id)
+        : supabase.from('goals').insert(payload);
+
+      const { error: e } = await withTimeout(op, 8000);
+      if (e) throw e;
+      onSaved();
+    } catch (err) {
+      setError(err?.message || 'Save failed. Try again.');
+    } finally {
       setBusy(false);
-      return setError('Not signed in.');
     }
-
-    const payload = {
-      user_id: userId,
-      name: name.trim(),
-      emoji,
-      description: description.trim() || null,
-      current_amount: num(current),
-      target_amount: tgt,
-      monthly_contribution: num(monthly),
-    };
-
-    const op = editing
-      ? supabase.from('goals').update(payload).eq('id', goal.id)
-      : supabase.from('goals').insert(payload);
-
-    const { error: e } = await op;
-    setBusy(false);
-    if (e) return setError(e.message);
-    onSaved();
   };
 
   const remove = async () => {
     if (!editing) return;
     if (!confirm('Delete this goal? This cannot be undone.')) return;
     setBusy(true);
-    const { error: e } = await supabase.from('goals').delete().eq('id', goal.id);
-    setBusy(false);
-    if (e) return setError(e.message);
-    onSaved();
+    try {
+      const { error: e } = await withTimeout(
+        supabase.from('goals').delete().eq('id', goal.id),
+        8000
+      );
+      if (e) throw e;
+      onSaved();
+    } catch (err) {
+      setError(err?.message || 'Delete failed. Try again.');
+    } finally {
+      setBusy(false);
+    }
   };
 
   const usePreset = (p) => {

@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { supabase } from '../../lib/supabase';
+import { withTimeout } from '../../lib/withTimeout';
 import { currentMonthYear } from '../../hooks/useFinancialData';
 
 const DEFAULT_CATEGORIES = [
@@ -35,49 +36,48 @@ export default function BudgetModal({ existing, income, onClose, onSaved }) {
   const save = async () => {
     setError('');
     setBusy(true);
-    const { data: sess } = await supabase.auth.getSession();
-    const userId = sess.session?.user?.id;
-    if (!userId) {
+    try {
+      const { data: sess } = await withTimeout(supabase.auth.getSession(), 6000);
+      const userId = sess.session?.user?.id;
+      if (!userId) throw new Error('Not signed in.');
+
+      const my = currentMonthYear();
+      const toUpsert = [];
+      const toDelete = [];
+
+      for (const cat of allCats) {
+        const n = num(values[cat]);
+        if (n > 0) {
+          toUpsert.push({ user_id: userId, category: cat, monthly_limit: n, month_year: my });
+        } else if (existingMap[cat]) {
+          toDelete.push(existingMap[cat].id);
+        }
+      }
+
+      if (toUpsert.length > 0) {
+        const { error: e } = await withTimeout(
+          supabase
+            .from('budgets')
+            .upsert(toUpsert, { onConflict: 'user_id,category,month_year' }),
+          8000
+        );
+        if (e) throw e;
+      }
+
+      if (toDelete.length > 0) {
+        const { error: e } = await withTimeout(
+          supabase.from('budgets').delete().in('id', toDelete),
+          8000
+        );
+        if (e) throw e;
+      }
+
+      onSaved();
+    } catch (err) {
+      setError(err?.message || 'Save failed. Try again.');
+    } finally {
       setBusy(false);
-      return setError('Not signed in.');
     }
-
-    const my = currentMonthYear();
-    const toUpsert = [];
-    const toDelete = [];
-
-    for (const cat of allCats) {
-      const n = num(values[cat]);
-      if (n > 0) {
-        toUpsert.push({ user_id: userId, category: cat, monthly_limit: n, month_year: my });
-      } else if (existingMap[cat]) {
-        toDelete.push(existingMap[cat].id);
-      }
-    }
-
-    if (toUpsert.length > 0) {
-      const { error: e } = await supabase
-        .from('budgets')
-        .upsert(toUpsert, { onConflict: 'user_id,category,month_year' });
-      if (e) {
-        setBusy(false);
-        return setError(e.message);
-      }
-    }
-
-    if (toDelete.length > 0) {
-      const { error: e } = await supabase
-        .from('budgets')
-        .delete()
-        .in('id', toDelete);
-      if (e) {
-        setBusy(false);
-        return setError(e.message);
-      }
-    }
-
-    setBusy(false);
-    onSaved();
   };
 
   return (
