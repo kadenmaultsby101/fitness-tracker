@@ -728,6 +728,28 @@
 .neg { color: var(--red); }
 .gold { color: var(--gold); }
 
+/* Accessible focus rings — visible without being garish */
+:where(button, a, input, select, textarea):focus-visible {
+  outline: 1px solid var(--b3);
+  outline-offset: 2px;
+}
+
+/* Bottom-nav active indicator: smooth slide */
+.bn { position: relative; }
+.bn.on::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 22px;
+  height: 2px;
+  background: var(--t1);
+  transition: width .2s ease;
+}
+.bn { border-top: none; }
+.bn.on { border-top: none; }
+
 /* Sage placeholder card */
 .sage-placeholder {
   margin: 28px 14px;

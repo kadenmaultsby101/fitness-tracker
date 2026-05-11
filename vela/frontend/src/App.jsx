@@ -61,17 +61,39 @@ function CenteredLabel({ text }) {
   return (
     <div style={{
       minHeight: '100vh',
+      width: '100%',
       display: 'flex',
+      flexDirection: 'column',
       alignItems: 'center',
       justifyContent: 'center',
       background: 'var(--bg)',
-      color: 'var(--t3)',
-      fontFamily: 'var(--mono)',
-      fontSize: 10,
-      letterSpacing: 3,
-      textTransform: 'uppercase',
+      gap: 14,
     }}>
-      {text}
+      <div style={{
+        fontFamily: 'var(--serif)',
+        fontSize: 56,
+        fontWeight: 300,
+        letterSpacing: -2,
+        color: 'var(--t1)',
+        opacity: 0.92,
+        animation: 'velaPulse 2.2s ease-in-out infinite',
+      }}>
+        Vela
+      </div>
+      <div style={{
+        fontSize: 8,
+        letterSpacing: 3,
+        textTransform: 'uppercase',
+        color: 'var(--t3)',
+      }}>
+        {text}
+      </div>
+      <style>{`
+        @keyframes velaPulse {
+          0%, 100% { opacity: 0.92; transform: translateY(0); }
+          50%      { opacity: 0.55; transform: translateY(-1px); }
+        }
+      `}</style>
     </div>
   );
 }

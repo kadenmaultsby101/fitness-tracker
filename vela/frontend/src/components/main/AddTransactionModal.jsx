@@ -8,7 +8,7 @@ function todayIso() {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
-export default function AddTransactionModal({ accounts, onClose, onSaved }) {
+export default function AddTransactionModal({ accounts, onClose, onSaved, onSwitchToAddAccount }) {
   const [direction, setDirection] = useState('expense'); // 'expense' | 'income'
   const [name, setName] = useState('');
   const [amount, setAmount] = useState('');
@@ -55,6 +55,32 @@ export default function AddTransactionModal({ accounts, onClose, onSaved }) {
     if (e) return setError(e.message);
     onSaved();
   };
+
+  if (accounts.length === 0) {
+    return (
+      <div className="moverlay" onClick={onClose}>
+        <div className="modal" onClick={(e) => e.stopPropagation()}>
+          <button type="button" className="mcl" onClick={onClose} aria-label="Close">×</button>
+          <div className="mtitle">No accounts yet</div>
+          <div className="msub">Add one first — transactions need to live somewhere</div>
+          <div className="mnote">
+            Drop in your <strong>Chase Checking</strong>, <strong>Robinhood</strong>, or whatever
+            you've got. Update the balance any time. Or connect a bank later from <strong>More</strong>.
+          </div>
+          <div className="mbtns">
+            <button type="button" className="bsec" onClick={onClose}>Not now</button>
+            <button
+              type="button"
+              className="bpri"
+              onClick={() => { onClose(); onSwitchToAddAccount?.(); }}
+            >
+              Add an account →
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="moverlay" onClick={onClose}>

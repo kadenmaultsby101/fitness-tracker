@@ -88,6 +88,7 @@ export default function MainApp({ session }) {
           accounts={data.accounts}
           onClose={closeModal}
           onSaved={() => { closeModal(); data.refresh(); }}
+          onSwitchToAddAccount={() => setModal('account')}
         />
       )}
       {modal === 'account' && (
