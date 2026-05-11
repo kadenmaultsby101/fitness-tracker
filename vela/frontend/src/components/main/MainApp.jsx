@@ -27,45 +27,55 @@ export default function MainApp({ session }) {
 
   const closeModal = () => setModal(null);
 
+  // Render only the active page. Previously all 5 were rendered with CSS
+  // opacity:0 hiding the inactive ones — robust visually but copy/paste,
+  // accessibility readers, and any CSS regression would expose them all.
+  // Single active page eliminates the whole class of 'why am I seeing
+  // everything stacked' bugs.
+  let activePage;
+  if (page === 'home') {
+    activePage = (
+      <HomePage
+        data={data}
+        session={session}
+        onAddTxn={() => setModal('txn')}
+        onAddAccount={() => setModal('account')}
+        onGoTo={setPage}
+      />
+    );
+  } else if (page === 'budget') {
+    activePage = (
+      <BudgetPage
+        data={data}
+        onEditBudgets={() => setModal('budget')}
+        onAddTxn={() => setModal('txn')}
+      />
+    );
+  } else if (page === 'goals') {
+    activePage = (
+      <GoalsPage
+        data={data}
+        onAddGoal={() => setModal({ kind: 'goal' })}
+        onEditGoal={(g) => setModal({ kind: 'goal', goal: g })}
+      />
+    );
+  } else if (page === 'coach') {
+    activePage = <SagePage data={data} session={session} />;
+  } else if (page === 'more') {
+    activePage = (
+      <MorePage
+        data={data}
+        session={session}
+        onSignOut={() => supabase.auth.signOut()}
+      />
+    );
+  }
+
   return (
     <div className="app">
       <div className="pages">
-        <div className={`page ${page === 'home' ? 'on' : ''}`}>
-          <HomePage
-            data={data}
-            session={session}
-            onAddTxn={() => setModal('txn')}
-            onAddAccount={() => setModal('account')}
-            onGoTo={setPage}
-          />
-        </div>
-
-        <div className={`page ${page === 'budget' ? 'on' : ''}`}>
-          <BudgetPage
-            data={data}
-            onEditBudgets={() => setModal('budget')}
-            onAddTxn={() => setModal('txn')}
-          />
-        </div>
-
-        <div className={`page ${page === 'goals' ? 'on' : ''}`}>
-          <GoalsPage
-            data={data}
-            onAddGoal={() => setModal({ kind: 'goal' })}
-            onEditGoal={(g) => setModal({ kind: 'goal', goal: g })}
-          />
-        </div>
-
-        <div className={`page coach-page ${page === 'coach' ? 'on' : ''}`}>
-          <SagePage data={data} session={session} />
-        </div>
-
-        <div className={`page ${page === 'more' ? 'on' : ''}`}>
-          <MorePage
-            data={data}
-            session={session}
-            onSignOut={() => supabase.auth.signOut()}
-          />
+        <div className={`page on ${page === 'coach' ? 'coach-page' : ''}`} key={page}>
+          {activePage}
         </div>
       </div>
 
