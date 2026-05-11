@@ -32,10 +32,32 @@
     { name: 'Journal',                                       timeOfDay: 'morning'   },
     { name: 'Read for 30 min',                               timeOfDay: 'morning'   },
     { name: 'Big breakfast (700+ cal, 35g+ protein)',        timeOfDay: 'morning'   },
+    { name: 'Creatine — 5g',                                 timeOfDay: 'morning'   },
+    { name: 'Whey protein — 1 scoop in shake',               timeOfDay: 'morning'   },
+    { name: 'Vitamin D3 + K2 — 2,000–5,000 IU D3 + 100–200 mcg K2', timeOfDay: 'morning' },
     { name: 'Left-hand writing (5 min)',                     timeOfDay: 'afternoon' },
     { name: 'Left hand for daily tasks (phone, mouse, one meal)', timeOfDay: 'afternoon' },
     { name: '30 min on Seed Swipe',                          timeOfDay: 'afternoon' },
+    { name: 'Zinc — 15–30 mg (with dinner)',                 timeOfDay: 'evening'   },
+    { name: 'Magnesium glycinate — 200–400 mg (1–2 hr before bed)', timeOfDay: 'evening' },
     { name: 'In bed by 11pm',                                timeOfDay: 'evening'   },
+  ];
+
+  // One-shot migrations for installs that already have data. Each entry
+  // is keyed by a string; once applied the key is recorded in
+  // state.appliedMigrations so it never runs again — that means if you
+  // later delete a habit we added here, it stays deleted.
+  const MIGRATIONS = [
+    {
+      key: 'supplements-2026-05',
+      add: [
+        { name: 'Creatine — 5g',                                       timeOfDay: 'morning' },
+        { name: 'Whey protein — 1 scoop in shake',                     timeOfDay: 'morning' },
+        { name: 'Vitamin D3 + K2 — 2,000–5,000 IU D3 + 100–200 mcg K2', timeOfDay: 'morning' },
+        { name: 'Zinc — 15–30 mg (with dinner)',                        timeOfDay: 'evening' },
+        { name: 'Magnesium glycinate — 200–400 mg (1–2 hr before bed)', timeOfDay: 'evening' },
+      ],
+    },
   ];
 
   /* ---------- 2. State ---------- */
@@ -65,7 +87,35 @@
       completions: {},
       settings: { notificationsEnabled: false },
       lastOpenedDate: todayKey(),
+      // Fresh installs already include every migration's habits via the
+      // seed list, so mark them all as applied to skip the no-op pass.
+      appliedMigrations: MIGRATIONS.map((m) => m.key),
     };
+  }
+
+  // Walk the migrations list and apply anything new. A migration only
+  // adds habits whose names don't already exist, so re-imports and
+  // partially-manual setups don't end up with duplicates.
+  function runMigrations() {
+    if (!Array.isArray(state.appliedMigrations)) state.appliedMigrations = [];
+    let dirty = false;
+    MIGRATIONS.forEach((m) => {
+      if (state.appliedMigrations.includes(m.key)) return;
+      const existing = new Set(state.habits.map((h) => h.name));
+      m.add.forEach((h, i) => {
+        if (existing.has(h.name)) return;
+        state.habits.push({
+          id: cryptoId(),
+          name: h.name,
+          timeOfDay: h.timeOfDay,
+          // Offset by ms so the migration order is preserved within a section.
+          createdAt: new Date(Date.now() + i).toISOString(),
+        });
+      });
+      state.appliedMigrations.push(m.key);
+      dirty = true;
+    });
+    if (dirty) saveState();
   }
 
   function loadState() {
@@ -80,6 +130,7 @@
         completions: parsed.completions && typeof parsed.completions === 'object' ? parsed.completions : {},
         settings: Object.assign({ notificationsEnabled: false }, parsed.settings || {}),
         lastOpenedDate: parsed.lastOpenedDate || todayKey(),
+        appliedMigrations: Array.isArray(parsed.appliedMigrations) ? parsed.appliedMigrations : [],
       };
     } catch (err) {
       console.warn('Trace: failed to read localStorage, starting fresh.', err);
@@ -467,6 +518,8 @@
   /* ---------- 7. Boot ---------- */
 
   function init() {
+    runMigrations();
+
     // First-run permission prompt: ask once. If granted we flip the
     // setting on automatically so the toggle reflects reality.
     if ('Notification' in window && Notification.permission === 'default'
