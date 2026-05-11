@@ -2,14 +2,47 @@ import { useMemo, useState } from 'react';
 import { supabase } from '../lib/supabase';
 import './Onboarding.css';
 
+// 7 default budget categories with rule-of-thumb percentages.
+// Used both as suggested fills and as educational copy.
 const DEFAULT_CATEGORIES = [
-  { key: 'Housing', pct: 0.30 },
-  { key: 'Food & Dining', pct: 0.12 },
-  { key: 'Transport', pct: 0.10 },
-  { key: 'Shopping', pct: 0.08 },
-  { key: 'Subscriptions', pct: 0.03 },
-  { key: 'Entertainment', pct: 0.05 },
-  { key: 'Bills', pct: 0.07 },
+  { key: 'Housing',        pct: 0.30, tip: '25–30% is the gold standard. Above 35% squeezes everything else.' },
+  { key: 'Food & Dining',  pct: 0.12, tip: 'Groceries + restaurants combined. Easiest line to slash.' },
+  { key: 'Transport',      pct: 0.10, tip: 'Gas, transit, parking, rideshare. Insurance counts here.' },
+  { key: 'Shopping',       pct: 0.08, tip: 'Clothes, gear, anything that isn\'t essentials.' },
+  { key: 'Subscriptions',  pct: 0.03, tip: 'Spotify, Netflix, ChatGPT — audit quarterly.' },
+  { key: 'Entertainment',  pct: 0.05, tip: 'Concerts, events, going out.' },
+  { key: 'Bills',          pct: 0.07, tip: 'Utilities, phone, internet. Mostly fixed.' },
+];
+
+const SITUATION_OPTIONS = [
+  { id: 'student',   label: 'Student' },
+  { id: 'working',   label: 'Working' },
+  { id: 'freelance', label: 'Self-employed / Freelance' },
+  { id: 'founder',   label: 'Building a company' },
+  { id: 'between',   label: 'Between things' },
+];
+
+const MOTIVATIONS = [
+  { id: 'spending',  label: 'Track my spending' },
+  { id: 'save',      label: 'Save for something specific' },
+  { id: 'wealth',    label: 'Build long-term wealth' },
+  { id: 'debt',      label: 'Get out of debt' },
+  { id: 'organize',  label: 'See everything in one place' },
+  { id: 'learn',     label: 'Learn how money works' },
+  { id: 'invest',    label: 'Start (or grow) investing' },
+];
+
+// Each interest seeds a real goal in the goals table on finish, with
+// sensible starting numbers the user can refine later in the Goals tab.
+const GOAL_INTERESTS = [
+  { id: 'emergency', emoji: '🛡️', label: 'Emergency Fund',    target: 15000, monthly: 500,  description: '3–6 months of expenses' },
+  { id: 'roth',      emoji: '🌱', label: 'Max Roth IRA',        target: 7000,  monthly: 583,  description: '2026 contribution limit' },
+  { id: 'house',     emoji: '🏠', label: 'House Down Payment',  target: 50000, monthly: 1000, description: 'FHA 3.5% on ~$1.4M' },
+  { id: 'debt',      emoji: '💳', label: 'Pay Off Credit Cards', target: 5000, monthly: 400,  description: 'Aggressive payoff' },
+  { id: 'invest',    emoji: '📊', label: 'Brokerage Growth',    target: 50000, monthly: 600,  description: 'Long-horizon investing' },
+  { id: 'travel',    emoji: '✈️', label: 'Travel Fund',          target: 5000,  monthly: 250,  description: 'Annual trip budget' },
+  { id: 'car',       emoji: '🚗', label: 'New Car',              target: 20000, monthly: 500,  description: 'Down payment + buffer' },
+  { id: 'fu',        emoji: '🗽', label: 'F-You Money',          target: 100000, monthly: 1000, description: '12 months of runway' },
 ];
 
 const currentMonthYear = () => {
@@ -17,10 +50,19 @@ const currentMonthYear = () => {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
 };
 
+const STEP_COUNT = 7;
+
 export default function Onboarding({ session, onDone }) {
   const [step, setStep] = useState(0);
+
+  const [age, setAge] = useState('');
+  const [situation, setSituation] = useState('');
+  const [motivations, setMotivations] = useState([]);
+  const [goalIds, setGoalIds] = useState([]);
+
   const [income, setIncome] = useState('');
   const [budgets, setBudgets] = useState({});
+
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
 
@@ -32,6 +74,11 @@ export default function Onboarding({ session, onDone }) {
     return Number.isFinite(n) && n > 0 ? n : 0;
   }, [income]);
 
+  const numericAge = useMemo(() => {
+    const n = Number(String(age).replace(/[^0-9]/g, ''));
+    return Number.isFinite(n) && n > 0 && n < 130 ? n : 0;
+  }, [age]);
+
   const suggestion = (cat) => {
     if (!numericIncome) return '';
     return String(Math.round(numericIncome * cat.pct));
@@ -42,45 +89,40 @@ export default function Onboarding({ session, onDone }) {
     setStep((s) => s + 1);
   };
 
-  const markComplete = async () => {
-    setBusy(true);
-    setError('');
-    const { error: e } = await supabase
-      .from('profiles')
-      .update({ onboarding_completed_at: new Date().toISOString() })
-      .eq('id', userId);
-    setBusy(false);
-    if (e) {
-      setError(e.message);
-      return;
-    }
-    onDone();
+  const toggleMulti = (state, setState, id) => {
+    setState(state.includes(id) ? state.filter((x) => x !== id) : [...state, id]);
   };
 
-  const saveIncomeAndNext = async () => {
+  // Final commit: write personalization + budget rows + auto-create goals,
+  // then mark onboarding complete.
+  const finishOnboarding = async () => {
     if (busy) return;
-    if (!numericIncome) {
-      next();
-      return;
-    }
     setBusy(true);
     setError('');
-    const { error: e } = await supabase
-      .from('profiles')
-      .update({ monthly_income: numericIncome })
-      .eq('id', userId);
-    setBusy(false);
-    if (e) {
-      setError(e.message);
-      return;
-    }
-    next();
-  };
 
-  const saveBudgetsAndNext = async () => {
-    if (busy) return;
     const my = currentMonthYear();
-    const rows = DEFAULT_CATEGORIES
+
+    const profileUpdate = {
+      onboarding_completed_at: new Date().toISOString(),
+      onboarding_data: {
+        age: numericAge || null,
+        situation: situation || null,
+        motivations,
+        goal_interests: goalIds,
+      },
+    };
+    if (numericIncome > 0) profileUpdate.monthly_income = numericIncome;
+
+    const { error: pe } = await supabase
+      .from('profiles')
+      .update(profileUpdate)
+      .eq('id', userId);
+    if (pe) {
+      setBusy(false);
+      return setError(pe.message);
+    }
+
+    const budgetRows = DEFAULT_CATEGORIES
       .map((c) => {
         const raw = budgets[c.key];
         const v = Number(String(raw ?? '').replace(/[^0-9.]/g, ''));
@@ -88,30 +130,45 @@ export default function Onboarding({ session, onDone }) {
       })
       .filter((r) => r.monthly_limit > 0)
       .map((r) => ({ user_id: userId, month_year: my, ...r }));
+    if (budgetRows.length > 0) {
+      const { error: be } = await supabase
+        .from('budgets')
+        .upsert(budgetRows, { onConflict: 'user_id,category,month_year' });
+      if (be) {
+        setBusy(false);
+        return setError(be.message);
+      }
+    }
 
-    if (rows.length === 0) {
-      next();
-      return;
+    const goalRows = GOAL_INTERESTS
+      .filter((g) => goalIds.includes(g.id))
+      .map((g) => ({
+        user_id: userId,
+        name: g.label,
+        emoji: g.emoji,
+        description: g.description,
+        current_amount: 0,
+        target_amount: g.target,
+        monthly_contribution: g.monthly,
+      }));
+    if (goalRows.length > 0) {
+      const { error: ge } = await supabase.from('goals').insert(goalRows);
+      if (ge) {
+        setBusy(false);
+        return setError(ge.message);
+      }
     }
-    setBusy(true);
-    setError('');
-    const { error: e } = await supabase
-      .from('budgets')
-      .upsert(rows, { onConflict: 'user_id,category,month_year' });
+
     setBusy(false);
-    if (e) {
-      setError(e.message);
-      return;
-    }
-    next();
+    onDone();
   };
 
-  const skipAll = () => markComplete();
+  const skipAll = () => finishOnboarding();
 
   return (
     <div className="ob">
       <div className="ob-steps">
-        {[0, 1, 2, 3, 4].map((i) => (
+        {Array.from({ length: STEP_COUNT }).map((_, i) => (
           <div
             key={i}
             className={`ob-dot ${i === step ? 'on' : i < step ? 'done' : ''}`}
@@ -119,13 +176,15 @@ export default function Onboarding({ session, onDone }) {
         ))}
       </div>
 
+      {/* Step 1 — Welcome */}
       {step === 0 && (
         <div className="ob-card">
-          <div className="ob-eyebrow">Step 1 of 5</div>
+          <div className="ob-eyebrow">Step 1 of {STEP_COUNT}</div>
           <div className="ob-title">Welcome to Vela, {name}.</div>
           <div className="ob-sub">
-            Let's set up your financial OS in 90 seconds. Income, budget,
-            accounts, and a quick intro to Sage — your AI coach.
+            Quick setup — about 90 seconds. Tell Sage who you are and what
+            you want from your money. The more I know, the sharper the
+            advice gets.
           </div>
           {error && <div className="ob-error">{error}</div>}
           <button type="button" className="ob-primary" onClick={next}>
@@ -134,13 +193,136 @@ export default function Onboarding({ session, onDone }) {
         </div>
       )}
 
+      {/* Step 2 — About you */}
       {step === 1 && (
         <div className="ob-card">
-          <div className="ob-eyebrow">Step 2 of 5</div>
+          <div className="ob-eyebrow">Step 2 of {STEP_COUNT}</div>
+          <div className="ob-title">A bit about you.</div>
+          <div className="ob-sub">
+            Sage uses these to calibrate advice. Both optional.
+          </div>
+          {error && <div className="ob-error">{error}</div>}
+
+          <div className="ob-field">
+            <label className="ob-label" htmlFor="ob-age">Age</label>
+            <input
+              id="ob-age"
+              className="ob-input"
+              type="text"
+              inputMode="numeric"
+              maxLength={3}
+              value={age}
+              onChange={(e) => setAge(e.target.value.replace(/\D/g, '').slice(0, 3))}
+              placeholder="—"
+              autoFocus
+            />
+          </div>
+
+          <div className="ob-field">
+            <label className="ob-label">Where you are in life</label>
+            <div className="ob-chip-grid">
+              {SITUATION_OPTIONS.map((opt) => (
+                <button
+                  type="button"
+                  key={opt.id}
+                  className={`ob-chip ${situation === opt.id ? 'on' : ''}`}
+                  onClick={() => setSituation(situation === opt.id ? '' : opt.id)}
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <button type="button" className="ob-primary" onClick={next}>
+            Continue →
+          </button>
+          <button type="button" className="ob-skip" onClick={next}>
+            Skip this step
+          </button>
+        </div>
+      )}
+
+      {/* Step 3 — Why Vela */}
+      {step === 2 && (
+        <div className="ob-card">
+          <div className="ob-eyebrow">Step 3 of {STEP_COUNT}</div>
+          <div className="ob-title">What brings you here?</div>
+          <div className="ob-sub">
+            Pick everything that fits. Sage will tune its tone and priorities
+            to match — no judgment, just direction.
+          </div>
+          {error && <div className="ob-error">{error}</div>}
+
+          <div className="ob-chip-grid">
+            {MOTIVATIONS.map((m) => (
+              <button
+                type="button"
+                key={m.id}
+                className={`ob-chip ${motivations.includes(m.id) ? 'on' : ''}`}
+                onClick={() => toggleMulti(motivations, setMotivations, m.id)}
+              >
+                {m.label}
+              </button>
+            ))}
+          </div>
+
+          <button type="button" className="ob-primary" onClick={next}>
+            Continue →
+          </button>
+          <button type="button" className="ob-skip" onClick={next}>
+            Skip this step
+          </button>
+        </div>
+      )}
+
+      {/* Step 4 — Goal interests */}
+      {step === 3 && (
+        <div className="ob-card">
+          <div className="ob-eyebrow">Step 4 of {STEP_COUNT}</div>
+          <div className="ob-title">Which goals matter?</div>
+          <div className="ob-sub">
+            Pick any — each becomes a real, tracked goal with sensible
+            starting numbers. Edit later in the Goals tab.
+          </div>
+          {error && <div className="ob-error">{error}</div>}
+
+          <div className="ob-goal-grid">
+            {GOAL_INTERESTS.map((g) => {
+              const on = goalIds.includes(g.id);
+              return (
+                <button
+                  type="button"
+                  key={g.id}
+                  className={`ob-goal-tile ${on ? 'on' : ''}`}
+                  onClick={() => toggleMulti(goalIds, setGoalIds, g.id)}
+                >
+                  <div className="ob-goal-em">{g.emoji}</div>
+                  <div className="ob-goal-nm">{g.label}</div>
+                  <div className="ob-goal-ds">{g.description}</div>
+                </button>
+              );
+            })}
+          </div>
+
+          <button type="button" className="ob-primary" onClick={next}>
+            Continue →
+          </button>
+          <button type="button" className="ob-skip" onClick={next}>
+            Skip this step
+          </button>
+        </div>
+      )}
+
+      {/* Step 5 — Income */}
+      {step === 4 && (
+        <div className="ob-card">
+          <div className="ob-eyebrow">Step 5 of {STEP_COUNT}</div>
           <div className="ob-title">What's your monthly income?</div>
           <div className="ob-sub">
-            Pre-tax, all sources. Used to suggest realistic budget limits and
-            personalize Sage's advice. You can change this anytime in Settings.
+            Pre-tax, all sources combined. Sage uses this for the percentage
+            math and the budget suggestions on the next step. Change it any
+            time in Settings.
           </div>
           {error && <div className="ob-error">{error}</div>}
           <div className="ob-field">
@@ -156,8 +338,8 @@ export default function Onboarding({ session, onDone }) {
               autoFocus
             />
           </div>
-          <button type="button" className="ob-primary" disabled={busy} onClick={saveIncomeAndNext}>
-            {busy ? '…' : 'Continue →'}
+          <button type="button" className="ob-primary" onClick={next}>
+            Continue →
           </button>
           <button type="button" className="ob-skip" onClick={next}>
             Skip for now
@@ -165,20 +347,25 @@ export default function Onboarding({ session, onDone }) {
         </div>
       )}
 
-      {step === 2 && (
+      {/* Step 6 — Budget (educational) */}
+      {step === 5 && (
         <div className="ob-card">
-          <div className="ob-eyebrow">Step 3 of 5</div>
-          <div className="ob-title">Set your monthly budget.</div>
+          <div className="ob-eyebrow">Step 6 of {STEP_COUNT}</div>
+          <div className="ob-title">Build a monthly budget.</div>
           <div className="ob-sub">
             {numericIncome
-              ? <>Sage suggested limits based on your <strong style={{ color: 'var(--t1)' }}>${numericIncome.toLocaleString()}</strong>/mo income. Adjust freely or leave blank to skip a category.</>
-              : 'Set a monthly limit for each category, or leave any blank.'}
+              ? <>I pre-filled suggestions based on your <strong style={{ color: 'var(--t1)' }}>${numericIncome.toLocaleString()}</strong>/mo. Override anything, or leave a row blank to skip.</>
+              : 'Set a monthly limit per category, or leave any blank. Helper notes show common rules of thumb.'}
           </div>
           {error && <div className="ob-error">{error}</div>}
-          <div className="ob-rows">
+
+          <div className="ob-budget-list">
             {DEFAULT_CATEGORIES.map((c) => (
-              <div key={c.key} className="ob-row">
-                <div className="ob-row-cat">{c.key}</div>
+              <div key={c.key} className="ob-budget-row">
+                <div className="ob-budget-meta">
+                  <div className="ob-budget-cat">{c.key}</div>
+                  <div className="ob-budget-tip">{c.tip}</div>
+                </div>
                 <input
                   className="ob-row-input"
                   type="text"
@@ -192,39 +379,20 @@ export default function Onboarding({ session, onDone }) {
               </div>
             ))}
           </div>
-          <button type="button" className="ob-primary" disabled={busy} onClick={saveBudgetsAndNext}>
-            {busy ? '…' : 'Continue →'}
-          </button>
-          <button type="button" className="ob-skip" onClick={next}>
-            Skip for now
-          </button>
-        </div>
-      )}
 
-      {step === 3 && (
-        <div className="ob-card">
-          <div className="ob-eyebrow">Step 4 of 5</div>
-          <div className="ob-title">Connect your first account.</div>
-          <div className="ob-sub">
-            Vela uses Plaid to pull real-time balances and transactions —
-            read-only, never stores credentials. Wired up in the next phase.
-          </div>
-          {error && <div className="ob-error">{error}</div>}
-          <div className="ob-plaid-stub">
-            Plaid Link · Coming next phase
-          </div>
           <button type="button" className="ob-primary" onClick={next}>
             Continue →
           </button>
           <button type="button" className="ob-skip" onClick={next}>
-            Skip for now — I'll connect later
+            Skip this step
           </button>
         </div>
       )}
 
-      {step === 4 && (
+      {/* Step 7 — Meet Sage */}
+      {step === 6 && (
         <div className="ob-card">
-          <div className="ob-eyebrow">Step 5 of 5</div>
+          <div className="ob-eyebrow">Step 7 of {STEP_COUNT}</div>
           <div className="ob-title">Meet Sage.</div>
           <div className="ob-sage">
             <div className="ob-sage-av">✦</div>
@@ -239,18 +407,30 @@ export default function Onboarding({ session, onDone }) {
           <div className="ob-note">
             Sage reads your real accounts, transactions, and goals — then
             tells you, with <strong>actual numbers</strong>, where you stand
-            and what to do next. Sharp, direct, specific. No fluff.
+            and what to do this week. Sharp, direct, specific. No fluff.
+            {goalIds.length > 0 && (
+              <>
+                <br /><br />
+                Tapping below also seeds <strong>{goalIds.length} goal{goalIds.length === 1 ? '' : 's'}</strong> in the Goals tab.
+              </>
+            )}
           </div>
           {error && <div className="ob-error">{error}</div>}
-          <button type="button" className="ob-primary" disabled={busy} onClick={markComplete}>
-            {busy ? '…' : 'Enter Vela →'}
+          <button type="button" className="ob-primary" disabled={busy} onClick={finishOnboarding}>
+            {busy ? 'Saving…' : 'Enter Vela →'}
           </button>
         </div>
       )}
 
-      {step < 4 && (
-        <button type="button" className="ob-skip" onClick={skipAll} style={{ maxWidth: 420 }}>
-          Skip entire setup
+      {step < STEP_COUNT - 1 && (
+        <button
+          type="button"
+          className="ob-skip"
+          onClick={skipAll}
+          style={{ maxWidth: 420 }}
+          disabled={busy}
+        >
+          {busy ? 'Saving…' : 'Skip entire setup'}
         </button>
       )}
     </div>

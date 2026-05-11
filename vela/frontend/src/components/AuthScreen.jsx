@@ -7,6 +7,7 @@ export default function AuthScreen() {
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [showPw, setShowPw] = useState(false);
   const [error, setError] = useState('');
   const [info, setInfo] = useState('');
   const [busy, setBusy] = useState(false);
@@ -121,16 +122,36 @@ export default function AuthScreen() {
         </div>
 
         <div className="auth-field">
-          <label className="auth-label" htmlFor="auth-password">Password</label>
+          <div className="auth-label-row">
+            <label className="auth-label" htmlFor="auth-password">Password</label>
+            <button
+              type="button"
+              className="auth-pw-toggle"
+              onClick={() => setShowPw((v) => !v)}
+              aria-label={showPw ? 'Hide password' : 'Show password'}
+              tabIndex={-1}
+            >
+              {showPw ? 'Hide' : 'Show'}
+            </button>
+          </div>
           <input
             id="auth-password"
             className="auth-input"
-            type="password"
+            type={showPw ? 'text' : 'password'}
             autoComplete={isSignup ? 'new-password' : 'current-password'}
             value={password}
             onChange={(e) => setPassword(e.target.value)}
-            placeholder="••••••••"
+            placeholder={isSignup ? 'At least 6 characters' : 'Your password'}
           />
+          {isSignup && (
+            <div className="auth-hint">
+              {password.length === 0
+                ? <>At least 6 characters. Use <strong>Show</strong> if you want to double-check what you typed.</>
+                : password.length < 6
+                  ? <span style={{ color: 'var(--red)' }}>{6 - password.length} more character{password.length === 5 ? '' : 's'} to go</span>
+                  : <span style={{ color: 'var(--green)' }}>Looks good</span>}
+            </div>
+          )}
         </div>
 
         <button type="submit" className="auth-submit" disabled={busy}>

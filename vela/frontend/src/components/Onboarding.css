@@ -277,3 +277,110 @@
   color: var(--t3);
   text-transform: uppercase;
 }
+
+/* Chip grid (Step 2 situation + Step 3 motivations) */
+.ob-chip-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 18px;
+}
+
+.ob-chip {
+  padding: 10px 14px;
+  background: var(--c2);
+  border: 1px solid var(--b1);
+  color: var(--t2);
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 1px;
+  cursor: pointer;
+  transition: border-color .15s, color .15s, background .15s;
+}
+.ob-chip:hover {
+  border-color: var(--b2);
+  color: var(--t1);
+}
+.ob-chip.on {
+  background: var(--c3);
+  border-color: var(--t1);
+  color: var(--t1);
+}
+
+/* Goal tile grid (Step 4) */
+.ob-goal-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-bottom: 18px;
+}
+
+.ob-goal-tile {
+  background: var(--c2);
+  border: 1px solid var(--b1);
+  padding: 14px 12px;
+  cursor: pointer;
+  transition: all .15s;
+  text-align: left;
+  font-family: var(--mono);
+  color: var(--t1);
+}
+.ob-goal-tile:hover {
+  border-color: var(--b2);
+}
+.ob-goal-tile.on {
+  border-color: var(--green);
+  background: rgba(159,235,184,.05);
+}
+.ob-goal-em {
+  font-size: 22px;
+  margin-bottom: 8px;
+}
+.ob-goal-nm {
+  font-size: 11px;
+  letter-spacing: -0.1px;
+  color: var(--t1);
+  margin-bottom: 3px;
+}
+.ob-goal-ds {
+  font-size: 8px;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  color: var(--t3);
+  line-height: 1.5;
+}
+.ob-goal-tile.on .ob-goal-ds {
+  color: var(--green);
+}
+
+/* Budget list (Step 6) */
+.ob-budget-list {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  margin-bottom: 18px;
+}
+
+.ob-budget-row {
+  display: grid;
+  grid-template-columns: 1fr 110px;
+  gap: 12px;
+  align-items: center;
+}
+
+.ob-budget-meta {
+  min-width: 0;
+}
+
+.ob-budget-cat {
+  font-size: 11px;
+  letter-spacing: 0.2px;
+  color: var(--t1);
+  margin-bottom: 3px;
+}
+
+.ob-budget-tip {
+  font-size: 9px;
+  color: var(--t3);
+  line-height: 1.45;
+}
