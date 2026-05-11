@@ -1,6 +1,6 @@
 import { money, moneyAbs, emojiFor, relDate } from './format';
 
-export default function BudgetPage({ data, onEditBudgets, onAddTxn }) {
+export default function BudgetPage({ data, onEditBudgets, onAddTxn, onEditTxn }) {
   const { transactions, budgets, derived, profile } = data;
   const today = new Date().toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
 
@@ -105,7 +105,14 @@ export default function BudgetPage({ data, onEditBudgets, onAddTxn }) {
           </div>
         ) : (
           transactions.slice(0, 50).map((t) => (
-            <div key={t.id} className="txn">
+            <div
+              key={t.id}
+              className="txn"
+              onClick={() => onEditTxn?.(t)}
+              role="button"
+              tabIndex={0}
+              style={{ cursor: onEditTxn ? 'pointer' : 'default' }}
+            >
               <div className="txn-em">{emojiFor(t.category, t.subcategory)}</div>
               <div className="txn-bd">
                 <div className="txn-nm">{t.merchant_name || t.name}</div>
