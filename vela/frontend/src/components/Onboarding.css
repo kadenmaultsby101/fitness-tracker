@@ -1,14 +1,15 @@
 .ob {
-  min-height: 100vh;
+  position: fixed;
+  inset: 0;
   width: 100%;
   background: var(--bg);
   display: flex;
   flex-direction: column;
   align-items: center;
   padding: 28px 22px 40px;
-  position: relative;
   overflow-x: hidden;
   overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
 }
 
 .ob::before {
@@ -383,4 +384,43 @@
   font-size: 9px;
   color: var(--t3);
   line-height: 1.45;
+}
+
+/* Finishing handoff frame — shown briefly between Onboarding finish and MainApp mount */
+.ob-finishing {
+  justify-content: center;
+  padding: 0 22px;
+  text-align: center;
+}
+.ob-finish-wordmark {
+  font-family: var(--serif);
+  font-size: 56px;
+  font-weight: 300;
+  letter-spacing: -2px;
+  color: var(--t1);
+  margin-bottom: 18px;
+  animation: velaWelcome 1s ease-out;
+}
+.ob-finish-msg {
+  font-family: var(--serif);
+  font-size: 26px;
+  font-weight: 300;
+  letter-spacing: -0.5px;
+  color: var(--t1);
+  margin-bottom: 10px;
+}
+.ob-finish-sub {
+  font-size: 9px;
+  letter-spacing: 3px;
+  text-transform: uppercase;
+  color: var(--t3);
+  animation: velaWelcomePulse 1.8s ease-in-out infinite;
+}
+@keyframes velaWelcome {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes velaWelcomePulse {
+  0%, 100% { opacity: 1; }
+  50%      { opacity: 0.4; }
 }
