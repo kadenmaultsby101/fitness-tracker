@@ -16,9 +16,11 @@ export default function App() {
 
   const loadProfile = useCallback(async (s) => {
     if (!s) {
+      console.info('[vela] loadProfile: no session, skipping');
       setProfile(null);
       return;
     }
+    console.info('[vela] loadProfile: fetching for', s.user.id);
     try {
       const { data, error } = await supabase
         .from('profiles')
@@ -26,13 +28,14 @@ export default function App() {
         .eq('id', s.user.id)
         .maybeSingle();
       if (error) {
-        console.error('profile fetch error', error);
+        console.error('[vela] profile fetch error', error);
         setProfile(null);
         return;
       }
+      console.info('[vela] loadProfile: got', data);
       setProfile(data);
     } catch (err) {
-      console.error('profile fetch threw', err);
+      console.error('[vela] profile fetch threw', err);
       setProfile(null);
     }
   }, []);
@@ -49,25 +52,29 @@ export default function App() {
       setLoading(false);
     }, BOOT_TIMEOUT_MS);
 
+    console.info('[vela] boot: calling auth.getSession()…');
     supabase.auth
       .getSession()
       .then(async ({ data, error }) => {
+        console.info('[vela] boot: getSession returned', { has_session: Boolean(data?.session), error });
         if (!mounted) return;
         if (error) {
-          console.error('getSession error', error);
+          console.error('[vela] getSession error', error);
           setBootError(`Auth: ${error.message}`);
         }
         setSession(data?.session ?? null);
         await loadProfile(data?.session ?? null);
+        console.info('[vela] boot: loadProfile finished');
       })
       .catch((err) => {
-        console.error('Vela boot threw', err);
+        console.error('[vela] Vela boot threw', err);
         if (mounted) setBootError(`Boot: ${err?.message || err}`);
       })
       .finally(() => {
         if (mounted) {
           clearTimeout(safety);
           setLoading(false);
+          console.info('[vela] boot: finally — loading=false');
         }
       });
 
