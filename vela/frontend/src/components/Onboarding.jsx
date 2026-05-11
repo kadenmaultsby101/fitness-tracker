@@ -3,7 +3,6 @@ import { supabase } from '../lib/supabase';
 import './Onboarding.css';
 
 // 7 default budget categories with rule-of-thumb percentages.
-// Used both as suggested fills and as educational copy.
 const DEFAULT_CATEGORIES = [
   { key: 'Housing',        pct: 0.30, tip: '25–30% is the gold standard. Above 35% squeezes everything else.' },
   { key: 'Food & Dining',  pct: 0.12, tip: 'Groceries + restaurants combined. Easiest line to slash.' },
@@ -14,12 +13,26 @@ const DEFAULT_CATEGORIES = [
   { key: 'Bills',          pct: 0.07, tip: 'Utilities, phone, internet. Mostly fixed.' },
 ];
 
+// Multi-select — pick all that apply.
 const SITUATION_OPTIONS = [
   { id: 'student',   label: 'Student' },
-  { id: 'working',   label: 'Working' },
+  { id: 'working',   label: 'Employed full-time' },
+  { id: 'parttime',  label: 'Working part-time' },
   { id: 'freelance', label: 'Self-employed / Freelance' },
   { id: 'founder',   label: 'Building a company' },
-  { id: 'between',   label: 'Between things' },
+  { id: 'investor',  label: 'Actively investing' },
+  { id: 'between',   label: 'Between jobs' },
+];
+
+// Single-select — primary discovery source.
+const DISCOVERY_OPTIONS = [
+  { id: 'word_of_mouth', label: 'A friend or family member' },
+  { id: 'social',        label: 'Social media (TikTok, Instagram, X)' },
+  { id: 'search',        label: 'Search engine' },
+  { id: 'press',         label: 'Article, podcast, or newsletter' },
+  { id: 'app_store',     label: 'App Store / Play Store' },
+  { id: 'organic',       label: 'Stumbled onto it' },
+  { id: 'other',         label: 'Other' },
 ];
 
 const MOTIVATIONS = [
@@ -32,17 +45,16 @@ const MOTIVATIONS = [
   { id: 'invest',    label: 'Start (or grow) investing' },
 ];
 
-// Each interest seeds a real goal in the goals table on finish, with
-// sensible starting numbers the user can refine later in the Goals tab.
+// Each interest seeds a real goal in the goals table on finish.
 const GOAL_INTERESTS = [
-  { id: 'emergency', emoji: '🛡️', label: 'Emergency Fund',    target: 15000, monthly: 500,  description: '3–6 months of expenses' },
+  { id: 'emergency', emoji: '🛡️', label: 'Emergency Fund',     target: 15000, monthly: 500,  description: '3–6 months of expenses' },
   { id: 'roth',      emoji: '🌱', label: 'Max Roth IRA',        target: 7000,  monthly: 583,  description: '2026 contribution limit' },
   { id: 'house',     emoji: '🏠', label: 'House Down Payment',  target: 50000, monthly: 1000, description: 'FHA 3.5% on ~$1.4M' },
   { id: 'debt',      emoji: '💳', label: 'Pay Off Credit Cards', target: 5000, monthly: 400,  description: 'Aggressive payoff' },
-  { id: 'invest',    emoji: '📊', label: 'Brokerage Growth',    target: 50000, monthly: 600,  description: 'Long-horizon investing' },
-  { id: 'travel',    emoji: '✈️', label: 'Travel Fund',          target: 5000,  monthly: 250,  description: 'Annual trip budget' },
-  { id: 'car',       emoji: '🚗', label: 'New Car',              target: 20000, monthly: 500,  description: 'Down payment + buffer' },
-  { id: 'fu',        emoji: '🗽', label: 'F-You Money',          target: 100000, monthly: 1000, description: '12 months of runway' },
+  { id: 'invest',    emoji: '📊', label: 'Brokerage Growth',     target: 50000, monthly: 600,  description: 'Long-horizon investing' },
+  { id: 'travel',    emoji: '✈️', label: 'Travel Fund',           target: 5000,  monthly: 250,  description: 'Annual trip budget' },
+  { id: 'car',       emoji: '🚗', label: 'New Car',               target: 20000, monthly: 500,  description: 'Down payment + buffer' },
+  { id: 'freedom',   emoji: '🗽', label: 'Financial Freedom',     target: 100000, monthly: 1000, description: '12 months of runway' },
 ];
 
 const currentMonthYear = () => {
@@ -50,13 +62,14 @@ const currentMonthYear = () => {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
 };
 
-const STEP_COUNT = 7;
+const STEP_COUNT = 8;
 
 export default function Onboarding({ session, onDone }) {
   const [step, setStep] = useState(0);
 
   const [age, setAge] = useState('');
-  const [situation, setSituation] = useState('');
+  const [situations, setSituations] = useState([]); // multi-select
+  const [discovery, setDiscovery] = useState('');   // single-select
   const [motivations, setMotivations] = useState([]);
   const [goalIds, setGoalIds] = useState([]);
 
@@ -64,6 +77,7 @@ export default function Onboarding({ session, onDone }) {
   const [budgets, setBudgets] = useState({});
 
   const [busy, setBusy] = useState(false);
+  const [finishing, setFinishing] = useState(false);
   const [error, setError] = useState('');
 
   const name = (session.user?.user_metadata?.name || '').trim() || 'there';
@@ -93,11 +107,10 @@ export default function Onboarding({ session, onDone }) {
     setState(state.includes(id) ? state.filter((x) => x !== id) : [...state, id]);
   };
 
-  // Final commit: write personalization + budget rows + auto-create goals,
-  // then mark onboarding complete.
   const finishOnboarding = async () => {
     if (busy) return;
     setBusy(true);
+    setFinishing(true);
     setError('');
 
     const my = currentMonthYear();
@@ -106,7 +119,8 @@ export default function Onboarding({ session, onDone }) {
       onboarding_completed_at: new Date().toISOString(),
       onboarding_data: {
         age: numericAge || null,
-        situation: situation || null,
+        situations,
+        discovered_via: discovery || null,
         motivations,
         goal_interests: goalIds,
       },
@@ -119,6 +133,7 @@ export default function Onboarding({ session, onDone }) {
       .eq('id', userId);
     if (pe) {
       setBusy(false);
+      setFinishing(false);
       return setError(pe.message);
     }
 
@@ -136,6 +151,7 @@ export default function Onboarding({ session, onDone }) {
         .upsert(budgetRows, { onConflict: 'user_id,category,month_year' });
       if (be) {
         setBusy(false);
+        setFinishing(false);
         return setError(be.message);
       }
     }
@@ -155,15 +171,31 @@ export default function Onboarding({ session, onDone }) {
       const { error: ge } = await supabase.from('goals').insert(goalRows);
       if (ge) {
         setBusy(false);
+        setFinishing(false);
         return setError(ge.message);
       }
     }
 
+    // Smooth handoff: brief celebration frame, then call onDone.
     setBusy(false);
-    onDone();
+    setTimeout(() => onDone(), 600);
   };
 
   const skipAll = () => finishOnboarding();
+
+  // While the final writes happen, swap to a clean "welcoming you in" frame
+  // so the user knows progress is being made, not stuck.
+  if (finishing) {
+    return (
+      <div className="ob ob-finishing">
+        <div className="ob-finish-wordmark">Vela</div>
+        <div className="ob-finish-msg">
+          Welcome aboard, {name}.
+        </div>
+        <div className="ob-finish-sub">Setting things up…</div>
+      </div>
+    );
+  }
 
   return (
     <div className="ob">
@@ -193,13 +225,13 @@ export default function Onboarding({ session, onDone }) {
         </div>
       )}
 
-      {/* Step 2 — About you */}
+      {/* Step 2 — About you (age + multi-select situations) */}
       {step === 1 && (
         <div className="ob-card">
           <div className="ob-eyebrow">Step 2 of {STEP_COUNT}</div>
           <div className="ob-title">A bit about you.</div>
           <div className="ob-sub">
-            Sage uses these to calibrate advice. Both optional.
+            Sage uses these to calibrate advice. Optional.
           </div>
           {error && <div className="ob-error">{error}</div>}
 
@@ -219,14 +251,16 @@ export default function Onboarding({ session, onDone }) {
           </div>
 
           <div className="ob-field">
-            <label className="ob-label">Where you are in life</label>
+            <label className="ob-label">
+              What describes you · Pick all that apply
+            </label>
             <div className="ob-chip-grid">
               {SITUATION_OPTIONS.map((opt) => (
                 <button
                   type="button"
                   key={opt.id}
-                  className={`ob-chip ${situation === opt.id ? 'on' : ''}`}
-                  onClick={() => setSituation(situation === opt.id ? '' : opt.id)}
+                  className={`ob-chip ${situations.includes(opt.id) ? 'on' : ''}`}
+                  onClick={() => toggleMulti(situations, setSituations, opt.id)}
                 >
                   {opt.label}
                 </button>
@@ -243,10 +277,42 @@ export default function Onboarding({ session, onDone }) {
         </div>
       )}
 
-      {/* Step 3 — Why Vela */}
+      {/* Step 3 — How did you find Vela (NEW) */}
       {step === 2 && (
         <div className="ob-card">
           <div className="ob-eyebrow">Step 3 of {STEP_COUNT}</div>
+          <div className="ob-title">How did you find Vela?</div>
+          <div className="ob-sub">
+            Pick the closest one — helps us know what's working.
+          </div>
+          {error && <div className="ob-error">{error}</div>}
+
+          <div className="ob-chip-grid">
+            {DISCOVERY_OPTIONS.map((opt) => (
+              <button
+                type="button"
+                key={opt.id}
+                className={`ob-chip ${discovery === opt.id ? 'on' : ''}`}
+                onClick={() => setDiscovery(discovery === opt.id ? '' : opt.id)}
+              >
+                {opt.label}
+              </button>
+            ))}
+          </div>
+
+          <button type="button" className="ob-primary" onClick={next}>
+            Continue →
+          </button>
+          <button type="button" className="ob-skip" onClick={next}>
+            Skip this step
+          </button>
+        </div>
+      )}
+
+      {/* Step 4 — Why Vela */}
+      {step === 3 && (
+        <div className="ob-card">
+          <div className="ob-eyebrow">Step 4 of {STEP_COUNT}</div>
           <div className="ob-title">What brings you here?</div>
           <div className="ob-sub">
             Pick everything that fits. Sage will tune its tone and priorities
@@ -276,10 +342,10 @@ export default function Onboarding({ session, onDone }) {
         </div>
       )}
 
-      {/* Step 4 — Goal interests */}
-      {step === 3 && (
+      {/* Step 5 — Goal interests */}
+      {step === 4 && (
         <div className="ob-card">
-          <div className="ob-eyebrow">Step 4 of {STEP_COUNT}</div>
+          <div className="ob-eyebrow">Step 5 of {STEP_COUNT}</div>
           <div className="ob-title">Which goals matter?</div>
           <div className="ob-sub">
             Pick any — each becomes a real, tracked goal with sensible
@@ -314,10 +380,10 @@ export default function Onboarding({ session, onDone }) {
         </div>
       )}
 
-      {/* Step 5 — Income */}
-      {step === 4 && (
+      {/* Step 6 — Income */}
+      {step === 5 && (
         <div className="ob-card">
-          <div className="ob-eyebrow">Step 5 of {STEP_COUNT}</div>
+          <div className="ob-eyebrow">Step 6 of {STEP_COUNT}</div>
           <div className="ob-title">What's your monthly income?</div>
           <div className="ob-sub">
             Pre-tax, all sources combined. Sage uses this for the percentage
@@ -347,10 +413,10 @@ export default function Onboarding({ session, onDone }) {
         </div>
       )}
 
-      {/* Step 6 — Budget (educational) */}
-      {step === 5 && (
+      {/* Step 7 — Budget */}
+      {step === 6 && (
         <div className="ob-card">
-          <div className="ob-eyebrow">Step 6 of {STEP_COUNT}</div>
+          <div className="ob-eyebrow">Step 7 of {STEP_COUNT}</div>
           <div className="ob-title">Build a monthly budget.</div>
           <div className="ob-sub">
             {numericIncome
@@ -389,10 +455,10 @@ export default function Onboarding({ session, onDone }) {
         </div>
       )}
 
-      {/* Step 7 — Meet Sage */}
-      {step === 6 && (
+      {/* Step 8 — Meet Sage */}
+      {step === 7 && (
         <div className="ob-card">
-          <div className="ob-eyebrow">Step 7 of {STEP_COUNT}</div>
+          <div className="ob-eyebrow">Step 8 of {STEP_COUNT}</div>
           <div className="ob-title">Meet Sage.</div>
           <div className="ob-sage">
             <div className="ob-sage-av">✦</div>
