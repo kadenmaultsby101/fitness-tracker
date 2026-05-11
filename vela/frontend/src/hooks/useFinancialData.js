@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { supabase } from '../lib/supabase';
+import { withTimeout } from '../lib/withTimeout';
 
 const currentMonthYear = () => {
   const d = new Date();
@@ -37,63 +38,75 @@ export function useFinancialData() {
 
   const load = useCallback(async () => {
     setError('');
-    const { data: sess } = await supabase.auth.getSession();
-    const userId = sess.session?.user?.id;
-    if (!userId) {
+    try {
+      const { data: sess } = await withTimeout(supabase.auth.getSession(), 6000);
+      const userId = sess.session?.user?.id;
+      if (!userId) {
+        setLoading(false);
+        return;
+      }
+
+      const my = currentMonthYear();
+
+      // Cap the whole parallel batch at 10s. If Supabase is dragging,
+      // we land with empty arrays + an error instead of leaving the UI
+      // stuck on skeletons.
+      const [
+        profileRes,
+        accountsRes,
+        txnsRes,
+        goalsRes,
+        budgetsRes,
+      ] = await withTimeout(
+        Promise.all([
+          supabase
+            .from('profiles')
+            .select('id, name, monthly_income, onboarding_completed_at, notify_transactions, notify_weekly_summary, notify_ai_insights, two_factor_enabled')
+            .eq('id', userId)
+            .maybeSingle(),
+          supabase
+            .from('accounts')
+            .select('id, plaid_account_id, plaid_item_id, name, official_name, type, subtype, balance_current, balance_available, currency, mask, updated_at')
+            .eq('user_id', userId)
+            .order('balance_current', { ascending: false, nullsFirst: false }),
+          supabase
+            .from('transactions')
+            .select('id, account_id, plaid_transaction_id, name, merchant_name, amount, category, subcategory, date, pending')
+            .eq('user_id', userId)
+            .order('date', { ascending: false })
+            .limit(200),
+          supabase
+            .from('goals')
+            .select('id, name, emoji, description, current_amount, target_amount, monthly_contribution, target_date, created_at')
+            .eq('user_id', userId)
+            .order('created_at', { ascending: true }),
+          supabase
+            .from('budgets')
+            .select('id, category, monthly_limit, month_year')
+            .eq('user_id', userId)
+            .eq('month_year', my),
+        ]),
+        10000
+      );
+
+      const firstError =
+        profileRes.error || accountsRes.error || txnsRes.error || goalsRes.error || budgetsRes.error;
+      if (firstError) {
+        console.error('useFinancialData error', firstError);
+        setError(firstError.message);
+      }
+
+      setProfile(profileRes.data || null);
+      setAccounts(accountsRes.data || []);
+      setTransactions(txnsRes.data || []);
+      setGoals(goalsRes.data || []);
+      setBudgets(budgetsRes.data || []);
+    } catch (err) {
+      console.error('useFinancialData load threw', err);
+      setError(err?.message || 'Failed to load data.');
+    } finally {
       setLoading(false);
-      return;
     }
-
-    const my = currentMonthYear();
-
-    const [
-      profileRes,
-      accountsRes,
-      txnsRes,
-      goalsRes,
-      budgetsRes,
-    ] = await Promise.all([
-      supabase
-        .from('profiles')
-        .select('id, name, monthly_income, onboarding_completed_at, notify_transactions, notify_weekly_summary, notify_ai_insights, two_factor_enabled')
-        .eq('id', userId)
-        .maybeSingle(),
-      supabase
-        .from('accounts')
-        .select('id, plaid_account_id, plaid_item_id, name, official_name, type, subtype, balance_current, balance_available, currency, mask, updated_at')
-        .eq('user_id', userId)
-        .order('balance_current', { ascending: false, nullsFirst: false }),
-      supabase
-        .from('transactions')
-        .select('id, account_id, plaid_transaction_id, name, merchant_name, amount, category, subcategory, date, pending')
-        .eq('user_id', userId)
-        .order('date', { ascending: false })
-        .limit(200),
-      supabase
-        .from('goals')
-        .select('id, name, emoji, description, current_amount, target_amount, monthly_contribution, target_date, created_at')
-        .eq('user_id', userId)
-        .order('created_at', { ascending: true }),
-      supabase
-        .from('budgets')
-        .select('id, category, monthly_limit, month_year')
-        .eq('user_id', userId)
-        .eq('month_year', my),
-    ]);
-
-    const firstError =
-      profileRes.error || accountsRes.error || txnsRes.error || goalsRes.error || budgetsRes.error;
-    if (firstError) {
-      console.error('useFinancialData error', firstError);
-      setError(firstError.message);
-    }
-
-    setProfile(profileRes.data || null);
-    setAccounts(accountsRes.data || []);
-    setTransactions(txnsRes.data || []);
-    setGoals(goalsRes.data || []);
-    setBudgets(budgetsRes.data || []);
-    setLoading(false);
   }, []);
 
   useEffect(() => {
