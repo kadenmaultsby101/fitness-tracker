@@ -1,0 +1,20 @@
+{
+  "name": "Vela — Financial OS",
+  "short_name": "Vela",
+  "description": "Premium personal finance OS — bank aggregation, budgets, goals, and an AI coach.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#070707",
+  "theme_color": "#070707",
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ],
+  "categories": ["finance", "productivity"]
+}
