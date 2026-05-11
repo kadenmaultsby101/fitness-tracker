@@ -49,14 +49,24 @@ export default function GoalModal({ goal, onClose, onSaved }) {
         monthly_contribution: num(monthly),
       };
 
-      const op = editing
-        ? supabase.from('goals').update(payload).eq('id', goal.id)
-        : supabase.from('goals').insert(payload);
+      console.info('[vela] GoalModal save: sending', payload);
 
-      const { error: e } = await withTimeout(op, 8000);
+      // Chain .select() so the insert returns the new row — proves the
+      // write actually landed and gives us the new id to verify.
+      const op = editing
+        ? supabase.from('goals').update(payload).eq('id', goal.id).select()
+        : supabase.from('goals').insert(payload).select();
+
+      const { data: returned, error: e } = await withTimeout(op, 8000);
+      console.info('[vela] GoalModal save: response', { returned, error: e });
+
       if (e) throw e;
+      if (!returned || returned.length === 0) {
+        throw new Error('Insert returned no row — likely an RLS / auth.uid() mismatch. Check Supabase Auth → Users to confirm your session matches a real user.');
+      }
       onSaved();
     } catch (err) {
+      console.error('[vela] GoalModal save failed', err);
       setError(err?.message || 'Save failed. Try again.');
     } finally {
       setBusy(false);

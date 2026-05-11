@@ -45,21 +45,29 @@ export default function AddAccountModal({ onClose, onSaved }) {
       const ts = Date.now();
       const random = Math.random().toString(36).slice(2, 10);
 
-      const { error: e } = await withTimeout(
-        supabase.from('accounts').insert({
-          user_id: userId,
-          plaid_account_id: `manual_${userId.slice(0, 8)}_${ts}_${random}`,
-          name: name.trim(),
-          type,
-          subtype,
-          balance_current: bal,
-          balance_available: type === 'credit' || type === 'loan' ? null : bal,
-          currency: 'USD',
-          mask: mask.trim() || null,
-        }),
+      const payload = {
+        user_id: userId,
+        plaid_account_id: `manual_${userId.slice(0, 8)}_${ts}_${random}`,
+        name: name.trim(),
+        type,
+        subtype,
+        balance_current: bal,
+        balance_available: type === 'credit' || type === 'loan' ? null : bal,
+        currency: 'USD',
+        mask: mask.trim() || null,
+      };
+      console.info('[vela] AddAccountModal save: sending', payload);
+
+      const { data: returned, error: e } = await withTimeout(
+        supabase.from('accounts').insert(payload).select(),
         8000
       );
+      console.info('[vela] AddAccountModal save: response', { returned, error: e });
+
       if (e) throw e;
+      if (!returned || returned.length === 0) {
+        throw new Error('Insert returned no row — RLS or auth mismatch.');
+      }
       onSaved();
     } catch (err) {
       setError(err?.message || 'Save failed. Try again.');

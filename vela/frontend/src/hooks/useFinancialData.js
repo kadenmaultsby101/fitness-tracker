@@ -96,6 +96,14 @@ export function useFinancialData() {
         setError(firstError.message);
       }
 
+      console.info('[vela] data.load result counts', {
+        profile: profileRes.data ? 1 : 0,
+        accounts: accountsRes.data?.length || 0,
+        transactions: txnsRes.data?.length || 0,
+        goals: goalsRes.data?.length || 0,
+        budgets: budgetsRes.data?.length || 0,
+      });
+
       setProfile(profileRes.data || null);
       setAccounts(accountsRes.data || []);
       setTransactions(txnsRes.data || []);
