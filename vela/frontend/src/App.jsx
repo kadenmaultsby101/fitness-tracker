@@ -98,7 +98,18 @@ export default function App() {
       </>
     );
   }
-  if (!profile || !profile.onboarding_completed_at) {
+
+  // Treat the user as onboarded if EITHER the profile row says so OR the
+  // browser has a localStorage flag set during a previous successful run
+  // of the Onboarding finishing handler. The flag survives the page reload
+  // that follows onboarding, so a slow Supabase write can't trap the user
+  // in an onboarding loop.
+  let locallyOnboarded = false;
+  try {
+    locallyOnboarded = localStorage.getItem(`vela:onboarded:${session.user.id}`) === '1';
+  } catch { /* private mode — non-fatal */ }
+
+  if (!profile?.onboarding_completed_at && !locallyOnboarded) {
     return (
       <>
         {banner}

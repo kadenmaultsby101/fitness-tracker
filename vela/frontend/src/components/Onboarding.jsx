@@ -112,6 +112,14 @@ export default function Onboarding({ session, onDone }) {
     setBusy(true);
     setError('');
 
+    // Mark locally FIRST. This survives the page reload even if the DB
+    // write hasn't completed yet — guarantees we don't loop the user back
+    // into onboarding on a slow Supabase round-trip. App.jsx treats this
+    // localStorage flag as authoritative.
+    try {
+      localStorage.setItem(`vela:onboarded:${userId}`, '1');
+    } catch { /* private mode / quota — non-fatal */ }
+
     const my = currentMonthYear();
 
     // Hard failsafe: if Supabase writes hang for any reason (slow network,
