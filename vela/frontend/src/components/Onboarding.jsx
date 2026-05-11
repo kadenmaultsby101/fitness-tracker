@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { supabase } from '../lib/supabase';
 import './Onboarding.css';
 
@@ -206,6 +206,21 @@ export default function Onboarding({ session, onDone }) {
   };
 
   const skipAll = () => finishOnboarding();
+
+  // Once the finishing celebration frame is up, hard-reload the page
+  // after a short beat. This is the bulletproof exit: the page reloads,
+  // App.jsx re-mounts, fetches a fresh session+profile, and routes
+  // wherever the user actually belongs (MainApp if onboarding_completed_at
+  // landed, back to Onboarding step 1 if it didn't). Either way the user
+  // is not trapped on 'Setting things up…' indefinitely waiting on a
+  // hung loadProfile that lives in the parent.
+  useEffect(() => {
+    if (!finishing) return;
+    const t = setTimeout(() => {
+      window.location.reload();
+    }, 1500);
+    return () => clearTimeout(t);
+  }, [finishing]);
 
   // While the final writes happen, swap to a clean "welcoming you in" frame
   // so the user knows progress is being made, not stuck.
