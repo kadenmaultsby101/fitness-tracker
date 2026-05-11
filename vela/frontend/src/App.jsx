@@ -1,122 +1,120 @@
-import { useState } from 'react'
-import reactLogo from './assets/react.svg'
-import viteLogo from './assets/vite.svg'
-import heroImg from './assets/hero.png'
-import './App.css'
+import { useEffect, useState } from 'react';
+import { supabase } from './lib/supabase';
+import AuthScreen from './components/AuthScreen';
 
-function App() {
-  const [count, setCount] = useState(0)
+export default function App() {
+  const [session, setSession] = useState(null);
+  const [loading, setLoading] = useState(true);
 
-  return (
-    <>
-      <section id="center">
-        <div className="hero">
-          <img src={heroImg} className="base" width="170" height="179" alt="" />
-          <img src={reactLogo} className="framework" alt="React logo" />
-          <img src={viteLogo} className="vite" alt="Vite logo" />
-        </div>
-        <div>
-          <h1>Get started</h1>
-          <p>
-            Edit <code>src/App.jsx</code> and save to test <code>HMR</code>
-          </p>
-        </div>
-        <button
-          type="button"
-          className="counter"
-          onClick={() => setCount((count) => count + 1)}
-        >
-          Count is {count}
-        </button>
-      </section>
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data }) => {
+      setSession(data.session);
+      setLoading(false);
+    });
 
-      <div className="ticks"></div>
+    const { data: sub } = supabase.auth.onAuthStateChange((_event, s) => {
+      setSession(s);
+    });
 
-      <section id="next-steps">
-        <div id="docs">
-          <svg className="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#documentation-icon"></use>
-          </svg>
-          <h2>Documentation</h2>
-          <p>Your questions, answered</p>
-          <ul>
-            <li>
-              <a href="https://vite.dev/" target="_blank">
-                <img className="logo" src={viteLogo} alt="" />
-                Explore Vite
-              </a>
-            </li>
-            <li>
-              <a href="https://react.dev/" target="_blank">
-                <img className="button-icon" src={reactLogo} alt="" />
-                Learn more
-              </a>
-            </li>
-          </ul>
-        </div>
-        <div id="social">
-          <svg className="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#social-icon"></use>
-          </svg>
-          <h2>Connect with us</h2>
-          <p>Join the Vite community</p>
-          <ul>
-            <li>
-              <a href="https://github.com/vitejs/vite" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#github-icon"></use>
-                </svg>
-                GitHub
-              </a>
-            </li>
-            <li>
-              <a href="https://chat.vite.dev/" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#discord-icon"></use>
-                </svg>
-                Discord
-              </a>
-            </li>
-            <li>
-              <a href="https://x.com/vite_js" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#x-icon"></use>
-                </svg>
-                X.com
-              </a>
-            </li>
-            <li>
-              <a href="https://bsky.app/profile/vite.dev" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#bluesky-icon"></use>
-                </svg>
-                Bluesky
-              </a>
-            </li>
-          </ul>
-        </div>
-      </section>
+    return () => sub.subscription.unsubscribe();
+  }, []);
 
-      <div className="ticks"></div>
-      <section id="spacer"></section>
-    </>
-  )
+  if (loading) {
+    return (
+      <div style={{
+        minHeight: '100vh',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        background: 'var(--bg)',
+        color: 'var(--t3)',
+        fontFamily: 'var(--mono)',
+        fontSize: 10,
+        letterSpacing: 3,
+        textTransform: 'uppercase',
+      }}>
+        Loading
+      </div>
+    );
+  }
+
+  if (!session) return <AuthScreen />;
+
+  return <SignedInPlaceholder session={session} />;
 }
 
-export default App
+function SignedInPlaceholder({ session }) {
+  const signOut = () => supabase.auth.signOut();
+  const name =
+    session.user?.user_metadata?.name ||
+    session.user?.email ||
+    'there';
+
+  return (
+    <div style={{
+      minHeight: '100vh',
+      background: 'var(--bg)',
+      color: 'var(--t1)',
+      fontFamily: 'var(--mono)',
+      display: 'flex',
+      flexDirection: 'column',
+      alignItems: 'center',
+      justifyContent: 'center',
+      padding: 28,
+      textAlign: 'center',
+    }}>
+      <div style={{
+        fontFamily: 'var(--serif)',
+        fontSize: 56,
+        fontWeight: 300,
+        letterSpacing: -2,
+        lineHeight: 1,
+      }}>
+        Vela
+      </div>
+      <div style={{
+        fontSize: 9,
+        letterSpacing: 3,
+        textTransform: 'uppercase',
+        color: 'var(--t3)',
+        marginTop: 12,
+        marginBottom: 36,
+      }}>
+        Signed in
+      </div>
+      <div style={{
+        background: 'var(--c1)',
+        border: '1px solid var(--b1)',
+        padding: '20px 24px',
+        maxWidth: 360,
+        width: '100%',
+        fontSize: 11,
+        lineHeight: 1.8,
+        color: 'var(--t2)',
+      }}>
+        Welcome, <strong style={{ color: 'var(--t1)' }}>{name}</strong>.
+        <br /><br />
+        Auth is working. The rest of Vela (onboarding, dashboard, Plaid,
+        Sage) lands in the next phases.
+      </div>
+      <button
+        type="button"
+        onClick={signOut}
+        style={{
+          marginTop: 24,
+          background: 'transparent',
+          border: '1px solid var(--b2)',
+          color: 'var(--t2)',
+          padding: '11px 22px',
+          fontFamily: 'var(--mono)',
+          fontSize: 10,
+          letterSpacing: 3,
+          textTransform: 'uppercase',
+          cursor: 'pointer',
+        }}
+      >
+        Sign Out
+      </button>
+    </div>
+  );
+}
