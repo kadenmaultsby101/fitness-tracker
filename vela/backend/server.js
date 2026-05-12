@@ -53,10 +53,11 @@ export const anthropic = new Anthropic({ apiKey: ANTHROPIC_API_KEY });
 // Sage's brain. Free tier as of late 2025: 15 RPM / 1.5k RPD / 1M TPM.
 // Plenty for personal use + a few friends.
 export const gemini = GEMINI_API_KEY ? new GoogleGenerativeAI(GEMINI_API_KEY) : null;
-// gemini-2.0-flash is current, still in the free tier, and reliably accepts
-// per-request systemInstruction as a Content object. Older 1.5 aliases reject
-// the format in some regions.
-const sageModel = gemini ? gemini.getGenerativeModel({ model: 'gemini-2.0-flash' }) : null;
+// gemini-1.5-flash has the most generous free-tier quotas (15 RPM / 1.5k RPD
+// / 1M TPM). The 2.0 aliases tightened the free tier in late 2025 — first
+// requests can get throttled even for new keys. With systemInstruction now
+// properly wrapped as a Content object below, 1.5-flash works fine.
+const sageModel = gemini ? gemini.getGenerativeModel({ model: 'gemini-1.5-flash' }) : null;
 
 // Fall back to placeholders so missing env vars don't crash the process at
 // import time — endpoints that touch Supabase will fail at request time with
@@ -235,7 +236,12 @@ STYLE
     // Log the full error server-side (it can be huge — includes the entire
     // prompt and provider response) but return a short clean message to the
     // client so the chat UI doesn't dump a wall of JSON at the user.
-    console.error('[sage] failed', err);
+    console.error('[sage] failed', {
+      message: err?.message,
+      status: err?.status || err?.statusCode,
+      errorDetails: err?.errorDetails,
+      stack: err?.stack?.split('\n').slice(0, 3).join('\n'),
+    });
     const raw = err?.message || 'Sage hit an error.';
     let clean = raw;
     if (/api[_ ]?key/i.test(raw)) clean = 'Sage authentication failed. Check GEMINI_API_KEY on the backend.';
