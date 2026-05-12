@@ -1,6 +1,8 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { supabase } from '../../lib/supabase';
 import { useFinancialData } from '../../hooks/useFinancialData';
+
+const API = import.meta.env.VITE_API_URL || '';
 import HomePage from './HomePage';
 import BudgetPage from './BudgetPage';
 import GoalsPage from './GoalsPage';
@@ -26,6 +28,43 @@ export default function MainApp({ session }) {
   const data = useFinancialData();
 
   const closeModal = () => setModal(null);
+
+  // Auto-sync Plaid accounts in the background on app open. Fire-and-forget:
+  // we don't block the UI on it, and we don't show errors. The Plaid endpoint
+  // pulls the last 7 days of transactions per item, idempotently — so even
+  // if the user just synced, this is a cheap no-op.
+  // Only runs once per mount, only if the backend is configured.
+  const autoSyncedRef = useRef(false);
+  useEffect(() => {
+    if (autoSyncedRef.current) return;
+    if (!API) return;
+    autoSyncedRef.current = true;
+
+    (async () => {
+      try {
+        const { data: sess } = await supabase.auth.getSession();
+        const token = sess.session?.access_token;
+        if (!token) return;
+        const res = await fetch(`${API}/api/sync`, {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (!res.ok) {
+          console.warn('[vela] auto-sync skipped:', res.status);
+          return;
+        }
+        const body = await res.json();
+        console.info('[vela] auto-sync result', body);
+        if (body.new_transactions > 0 || body.items > 0) {
+          data.refresh();
+        }
+      } catch (err) {
+        // Background sync failure is non-fatal — user can still tap Sync now manually
+        console.warn('[vela] auto-sync failed', err);
+      }
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Render only the active page. Previously all 5 were rendered with CSS
   // opacity:0 hiding the inactive ones — robust visually but copy/paste,
