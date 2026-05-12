@@ -53,11 +53,11 @@ export const anthropic = new Anthropic({ apiKey: ANTHROPIC_API_KEY });
 // Sage's brain. Free tier as of late 2025: 15 RPM / 1.5k RPD / 1M TPM.
 // Plenty for personal use + a few friends.
 export const gemini = GEMINI_API_KEY ? new GoogleGenerativeAI(GEMINI_API_KEY) : null;
-// gemini-1.5-flash has the most generous free-tier quotas (15 RPM / 1.5k RPD
-// / 1M TPM). The 2.0 aliases tightened the free tier in late 2025 — first
-// requests can get throttled even for new keys. With systemInstruction now
-// properly wrapped as a Content object below, 1.5-flash works fine.
-const sageModel = gemini ? gemini.getGenerativeModel({ model: 'gemini-1.5-flash' }) : null;
+// gemini-2.5-flash is the current free-tier alias on v1beta as of late 2025.
+// 1.5-flash was retired September 2025 (404 on v1beta). 2.0-flash has
+// inconsistent free-tier quotas on new keys. 2.5-flash is the safest pick
+// that's actually generateContent-compatible on free tier today.
+const sageModel = gemini ? gemini.getGenerativeModel({ model: 'gemini-2.5-flash' }) : null;
 
 // Fall back to placeholders so missing env vars don't crash the process at
 // import time — endpoints that touch Supabase will fail at request time with
