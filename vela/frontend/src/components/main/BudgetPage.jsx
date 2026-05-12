@@ -62,11 +62,31 @@ export default function BudgetPage({ data, onEditBudgets, onAddTxn, onEditTxn })
       <div className="card">
         <div className="ctitle">
           <span>Spending vs. Budget</span>
-          <button type="button" className="ctitle-act" onClick={onEditBudgets}>Edit</button>
+          {budgets.length > 0 && (
+            <button type="button" className="ctitle-act" onClick={onEditBudgets}>Edit budget</button>
+          )}
         </div>
-        {rows.length === 0 ? (
+        {budgets.length === 0 ? (
+          <div style={{ padding: '8px 0 4px', textAlign: 'center' }}>
+            <div style={{ fontFamily: 'var(--serif)', fontSize: 22, fontWeight: 300, letterSpacing: '-.5px', color: 'var(--t1)', marginBottom: 6 }}>
+              You haven't set a budget yet
+            </div>
+            <div style={{ fontSize: 11, color: 'var(--t2)', lineHeight: 1.7, marginBottom: 18, padding: '0 6px' }}>
+              Sage will track your spending against limits and call out anything that drifts.
+              Takes about 60 seconds — Sage can pre-fill suggestions based on your income.
+            </div>
+            <button
+              type="button"
+              className="bpri"
+              style={{ padding: '13px 26px', width: 'auto' }}
+              onClick={onEditBudgets}
+            >
+              Build your budget →
+            </button>
+          </div>
+        ) : rows.length === 0 ? (
           <div style={{ fontSize: 11, color: 'var(--t3)', lineHeight: 1.7 }}>
-            No budget set and nothing spent yet this month. Tap Edit to set monthly limits.
+            Budget set, but no spending logged yet this month.
           </div>
         ) : (
           rows.map((r) => {
