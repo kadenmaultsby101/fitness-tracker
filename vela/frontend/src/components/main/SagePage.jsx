@@ -9,11 +9,9 @@ const SUGGESTIONS = [
   'Am I saving enough?',
   'How should I allocate my next paycheck?',
   'Where am I overspending?',
-  'What\'s the smartest next move with my money?',
 ];
 
-// Parse **bold** segments inline. Keeps the markdown rendering tight without
-// pulling in a full library.
+// Parse **bold** segments inline. Tight markdown rendering without a library.
 function renderText(text) {
   if (!text) return null;
   return text.split(/(\*\*[^*]+\*\*)/g).map((part, i) =>
@@ -24,7 +22,7 @@ function renderText(text) {
 }
 
 export default function SagePage({ data, session }) {
-  const { profile, accounts, transactions, goals, derived } = data;
+  const { profile, accounts, goals, derived } = data;
   const firstName = (profile?.name || session?.user?.user_metadata?.name || '').split(' ')[0] || 'there';
   const userInitial = firstName.charAt(0).toUpperCase();
 
@@ -79,7 +77,7 @@ export default function SagePage({ data, session }) {
         ...m,
         { id: `local-u-${Date.now()}`, role: 'user', content: text },
         { id: `local-a-${Date.now()}`, role: 'assistant',
-          content: 'I\'m not connected yet. Backend needs to be deployed before I can answer. Tell Kaden to set `GEMINI_API_KEY` on Render.' },
+          content: 'I\'m not connected yet. Backend needs to be deployed before I can answer.' },
       ]);
       setInput('');
       return;
@@ -88,7 +86,6 @@ export default function SagePage({ data, session }) {
     setInput('');
     setSending(true);
 
-    // Optimistic user bubble.
     const optimistic = { id: `local-u-${Date.now()}`, role: 'user', content: text };
     setMessages((m) => [...m, optimistic]);
 
@@ -119,7 +116,7 @@ export default function SagePage({ data, session }) {
       setMessages((m) => [
         ...m,
         { id: `local-err-${Date.now()}`, role: 'assistant',
-          content: `Hit an error: **${err.message}**. Try again in a sec — Render may be waking up if it's been idle.` },
+          content: `Hit an error: **${err.message}**. Try again — Render may be waking if idle.` },
       ]);
     } finally {
       setSending(false);
@@ -135,13 +132,17 @@ export default function SagePage({ data, session }) {
 
   const empty = !loadingHistory && messages.length === 0 && !historyError;
 
-  // Tailored welcome line based on the user's data state.
-  const welcomeLine = (() => {
-    if (accounts.length === 0 && transactions.length === 0 && goals.length === 0) {
-      return `Hey ${firstName}. Add an account, log a couple transactions, set a goal or two — then come back and I'll have real numbers to coach you on.`;
+  // Tailored intro text — uses the user's real data state.
+  const introMessage = (() => {
+    if (accounts.length === 0 && goals.length === 0) {
+      return <>Add an account, log a couple transactions, and set a goal — then I'll coach you with <strong>real numbers</strong> from your data.</>;
     }
-    const goalLine = goals.length ? ` and **${goals.length} goal${goals.length === 1 ? '' : 's'}** I'm tracking` : '';
-    return `Hey ${firstName}. I can see **${money(derived.netWorth)}** across **${accounts.length}** ${accounts.length === 1 ? 'account' : 'accounts'}${goalLine}. What's on your mind?`;
+    const goalLine = goals.length ? <> and <strong>{goals.length} goal{goals.length === 1 ? '' : 's'}</strong></> : null;
+    return (
+      <>
+        I'm watching <strong>{money(derived.netWorth)}</strong> across <strong>{accounts.length}</strong> {accounts.length === 1 ? 'account' : 'accounts'}{goalLine}. Tap a question below or ask me anything.
+      </>
+    );
   })();
 
   return (
@@ -152,23 +153,9 @@ export default function SagePage({ data, session }) {
           <div className="coach-nm">Sage</div>
           <div className="coach-st">
             <span className="ai-dot" />
-            {API ? 'Live' : 'Backend offline'}
+            {API ? 'Live · Powered by Gemini' : 'Backend offline'}
           </div>
         </div>
-      </div>
-
-      <div className="chips">
-        {SUGGESTIONS.map((s) => (
-          <button
-            key={s}
-            type="button"
-            className="chip"
-            onClick={() => send(s)}
-            disabled={sending}
-          >
-            {s}
-          </button>
-        ))}
       </div>
 
       <div className="chat-msgs" ref={scrollRef}>
@@ -180,17 +167,33 @@ export default function SagePage({ data, session }) {
             Loading conversation…
           </div>
         ) : historyError ? (
-          <div className="merr" style={{ margin: 14 }}>
+          <div className="merr">
             Could not load chat history: {historyError}
           </div>
         ) : empty ? (
-          <div className="msg">
-            <div className="mav ai">✦</div>
-            <div className="mbub">
-              <div className="mfrom">Sage</div>
-              <div className="mtxt">{renderText(welcomeLine)}</div>
+          <>
+            <div className="sage-hero">
+              <div className="sage-hero-glyph">✦</div>
+              <div className="sage-hero-title">Hey, {firstName}.</div>
+              <div className="sage-hero-tag">Your AI financial coach</div>
+              <div className="sage-hero-msg">{introMessage}</div>
             </div>
-          </div>
+
+            <div className="sage-suggest-lbl">Try one of these</div>
+            <div className="chips">
+              {SUGGESTIONS.map((s) => (
+                <button
+                  key={s}
+                  type="button"
+                  className="chip"
+                  onClick={() => send(s)}
+                  disabled={sending}
+                >
+                  {s}
+                </button>
+              ))}
+            </div>
+          </>
         ) : (
           messages.map((m) => (
             <div key={m.id} className={`msg ${m.role === 'user' ? 'u' : ''}`}>
@@ -226,7 +229,7 @@ export default function SagePage({ data, session }) {
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={onKeyDown}
           placeholder={API ? 'Ask Sage anything…' : 'Backend not deployed yet'}
-          disabled={sending}
+          disabled={sending || !API}
           rows={1}
         />
         <button
