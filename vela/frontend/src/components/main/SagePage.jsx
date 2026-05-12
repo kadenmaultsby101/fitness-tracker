@@ -153,7 +153,7 @@ export default function SagePage({ data, session }) {
           <div className="coach-nm">Sage</div>
           <div className="coach-st">
             <span className="ai-dot" />
-            {API ? 'Live · Powered by Gemini' : 'Backend offline'}
+            {API ? 'Live · Powered by Claude' : 'Backend offline'}
           </div>
         </div>
       </div>

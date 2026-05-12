@@ -50,14 +50,14 @@ export const plaid = new PlaidApi(
 
 export const anthropic = new Anthropic({ apiKey: ANTHROPIC_API_KEY });
 
-// Sage's brain. Free tier as of late 2025: 15 RPM / 1.5k RPD / 1M TPM.
-// Plenty for personal use + a few friends.
+// Sage's brain — Claude Haiku 4.5. Stable, fast, ~$0.005/chat. With a
+// $25/mo spending cap set on the Anthropic dashboard + the per-user daily
+// rate limit in /api/sage below, the worst-case bill is bounded.
+const SAGE_MODEL = 'claude-haiku-4-5';
+
+// Optional Gemini fallback kept around so future code can flip between
+// providers without re-importing. Not used by /api/sage today.
 export const gemini = GEMINI_API_KEY ? new GoogleGenerativeAI(GEMINI_API_KEY) : null;
-// gemini-2.5-flash is the current free-tier alias on v1beta as of late 2025.
-// 1.5-flash was retired September 2025 (404 on v1beta). 2.0-flash has
-// inconsistent free-tier quotas on new keys. 2.5-flash is the safest pick
-// that's actually generateContent-compatible on free tier today.
-const sageModel = gemini ? gemini.getGenerativeModel({ model: 'gemini-2.5-flash' }) : null;
 
 // Fall back to placeholders so missing env vars don't crash the process at
 // import time — endpoints that touch Supabase will fail at request time with
@@ -114,23 +114,50 @@ app.get('/', (_req, res) => {
   });
 });
 
-// ─── SAGE (Prompt 7) ────────────────────────────────────────────────────────
+// ─── SAGE ───────────────────────────────────────────────────────────────────
 // POST /api/sage  { message, history? } → { reply }
-// Pulls the user's real financial data, builds a Sage system prompt, calls
-// Google Gemini Flash (free tier), persists both sides of the exchange to
-// chat_messages, returns the assistant reply.
+// Powered by Anthropic Claude Haiku 4.5. Stable, fast, ~$0.005/chat.
+// Multi-layered cost protection:
+//   1. Hard $25/mo cap set on the Anthropic dashboard (account-level)
+//   2. Per-user per-day rate limit below (50 messages/day/user)
+//   3. max_tokens capped at 1024 per reply
+// Together these bound the worst-case monthly bill regardless of how
+// many users sign up or how hard they hammer Sage.
+const SAGE_DAILY_LIMIT = 50;
+
 app.post('/api/sage', async (req, res) => {
   try {
     const user = await getUser(req);
     if (!user) return res.status(401).json({ error: 'unauthorized' });
-    if (!sageModel) return res.status(503).json({ error: 'Sage not configured — set GEMINI_API_KEY on the backend.' });
+    if (!ANTHROPIC_API_KEY) {
+      return res.status(503).json({ error: 'Sage not configured — set ANTHROPIC_API_KEY on the backend.' });
+    }
 
     const { message, history = [] } = req.body || {};
     if (!message || typeof message !== 'string') {
       return res.status(400).json({ error: 'message required' });
     }
 
-    // Pull user's financial context in parallel.
+    // ─── PER-USER DAILY RATE LIMIT ──────────────────────────────────────────
+    // Count this user's outgoing messages today (UTC). Persisted to
+    // chat_messages anyway so this is free — no extra table.
+    const todayUtcStart = new Date();
+    todayUtcStart.setUTCHours(0, 0, 0, 0);
+    const { count: todayCount, error: countErr } = await supabase
+      .from('chat_messages')
+      .select('id', { count: 'exact', head: true })
+      .eq('user_id', user.id)
+      .eq('role', 'user')
+      .gte('created_at', todayUtcStart.toISOString());
+    if (countErr) {
+      console.warn('[sage] rate-limit check failed, allowing through', countErr);
+    } else if ((todayCount || 0) >= SAGE_DAILY_LIMIT) {
+      return res.status(429).json({
+        error: `You've hit today's Sage limit (${SAGE_DAILY_LIMIT} messages). Resets at midnight UTC.`,
+      });
+    }
+
+    // ─── PULL FINANCIAL CONTEXT IN PARALLEL ─────────────────────────────────
     const [profileRes, accountsRes, txnsRes, goalsRes, budgetsRes] = await Promise.all([
       supabase
         .from('profiles')
@@ -170,7 +197,7 @@ app.post('/api/sage', async (req, res) => {
     const fmt = (n) => '$' + Number(n || 0).toLocaleString('en-US', { maximumFractionDigits: 0 });
     const ob = profile.onboarding_data || {};
 
-    const systemInstruction = `You are Sage, the AI financial coach inside Vela — a premium personal finance app. You're talking with ${firstName}.
+    const systemPrompt = `You are Sage, the AI financial coach inside Vela — a premium personal finance app. You're talking with ${firstName}.
 
 USER CONTEXT
 - Name: ${profile.name || 'Unknown'}
@@ -200,28 +227,34 @@ STYLE
 - If a number isn't in the data, say "I don't see that yet" instead of guessing.
 - Plaid convention: in transactions, positive amounts = outflows (spending), negative = inflows (income).`;
 
-    // Build history for Gemini. Truncate to last 20 messages to stay well
-    // under context limits.
+    // ─── BUILD MESSAGE HISTORY FOR CLAUDE ───────────────────────────────────
+    // Anthropic format: { role: 'user' | 'assistant', content: '...' }
+    // Truncate to last 20 messages to keep prompt size sane.
     const trimmedHistory = (Array.isArray(history) ? history : []).slice(-20);
-    const geminiHistory = trimmedHistory.map((m) => ({
-      role: m.role === 'assistant' ? 'model' : 'user',
-      parts: [{ text: String(m.content || '') }],
-    }));
+    const messages = [
+      ...trimmedHistory
+        .filter((m) => m && (m.role === 'user' || m.role === 'assistant'))
+        .map((m) => ({ role: m.role, content: String(m.content || '') })),
+      { role: 'user', content: message },
+    ];
 
-    // Gemini's v1beta API expects systemInstruction as a Content object,
-    // not a bare string. Wrap it. (The SDK type defs say string works, but
-    // the REST endpoint rejects it with a 400.)
-    const chat = sageModel.startChat({
-      systemInstruction: { parts: [{ text: systemInstruction }] },
-      history: geminiHistory,
-      generationConfig: { maxOutputTokens: 1024, temperature: 0.6 },
+    const response = await anthropic.messages.create({
+      model: SAGE_MODEL,
+      max_tokens: 1024,
+      system: systemPrompt,
+      messages,
     });
 
-    const result = await chat.sendMessage(message);
-    const reply = result.response.text();
+    // Anthropic returns content as an array of blocks; combine all text blocks.
+    const reply = response.content
+      .filter((block) => block.type === 'text')
+      .map((block) => block.text)
+      .join('\n')
+      .trim();
 
-    // Persist both sides of the exchange. Best-effort — if it fails we still
-    // return the reply so the user isn't blocked.
+    if (!reply) throw new Error('Empty reply from Claude.');
+
+    // Persist both sides of the exchange. Best-effort.
     try {
       await supabase.from('chat_messages').insert([
         { user_id: user.id, role: 'user', content: message },
@@ -233,21 +266,23 @@ STYLE
 
     res.json({ reply });
   } catch (err) {
-    // Log the full error server-side (it can be huge — includes the entire
-    // prompt and provider response) but return a short clean message to the
-    // client so the chat UI doesn't dump a wall of JSON at the user.
     console.error('[sage] failed', {
       message: err?.message,
       status: err?.status || err?.statusCode,
-      errorDetails: err?.errorDetails,
+      type: err?.error?.type,
       stack: err?.stack?.split('\n').slice(0, 3).join('\n'),
     });
     const raw = err?.message || 'Sage hit an error.';
     let clean = raw;
-    if (/api[_ ]?key/i.test(raw)) clean = 'Sage authentication failed. Check GEMINI_API_KEY on the backend.';
-    else if (/quota|rate.?limit/i.test(raw)) clean = 'Sage hit Gemini\'s free-tier rate limit. Try again in a minute.';
-    else if (/400|bad.?request|invalid/i.test(raw)) clean = 'Sage got a bad-request from Gemini. Try a different question.';
-    else if (raw.length > 200) clean = 'Sage hit an unexpected error. Try again — refresh if it persists.';
+    if (/api[_ ]?key|invalid_api_key|authentication/i.test(raw)) {
+      clean = 'Sage authentication failed. Check ANTHROPIC_API_KEY on the backend.';
+    } else if (/quota|rate.?limit|429/i.test(raw)) {
+      clean = 'Sage hit a rate limit. Try again in a minute.';
+    } else if (/credit|balance|payment/i.test(raw)) {
+      clean = 'Sage ran out of credits. Top up at console.anthropic.com → Billing.';
+    } else if (raw.length > 200) {
+      clean = 'Sage hit an unexpected error. Try again — refresh if it persists.';
+    }
     res.status(500).json({ error: clean });
   }
 });
