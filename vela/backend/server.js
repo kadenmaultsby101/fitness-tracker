@@ -53,7 +53,10 @@ export const anthropic = new Anthropic({ apiKey: ANTHROPIC_API_KEY });
 // Sage's brain. Free tier as of late 2025: 15 RPM / 1.5k RPD / 1M TPM.
 // Plenty for personal use + a few friends.
 export const gemini = GEMINI_API_KEY ? new GoogleGenerativeAI(GEMINI_API_KEY) : null;
-const sageModel = gemini ? gemini.getGenerativeModel({ model: 'gemini-1.5-flash' }) : null;
+// gemini-2.0-flash is current, still in the free tier, and reliably accepts
+// per-request systemInstruction as a Content object. Older 1.5 aliases reject
+// the format in some regions.
+const sageModel = gemini ? gemini.getGenerativeModel({ model: 'gemini-2.0-flash' }) : null;
 
 // Fall back to placeholders so missing env vars don't crash the process at
 // import time — endpoints that touch Supabase will fail at request time with
@@ -204,8 +207,11 @@ STYLE
       parts: [{ text: String(m.content || '') }],
     }));
 
+    // Gemini's v1beta API expects systemInstruction as a Content object,
+    // not a bare string. Wrap it. (The SDK type defs say string works, but
+    // the REST endpoint rejects it with a 400.)
     const chat = sageModel.startChat({
-      systemInstruction,
+      systemInstruction: { parts: [{ text: systemInstruction }] },
       history: geminiHistory,
       generationConfig: { maxOutputTokens: 1024, temperature: 0.6 },
     });
@@ -226,8 +232,17 @@ STYLE
 
     res.json({ reply });
   } catch (err) {
+    // Log the full error server-side (it can be huge — includes the entire
+    // prompt and provider response) but return a short clean message to the
+    // client so the chat UI doesn't dump a wall of JSON at the user.
     console.error('[sage] failed', err);
-    res.status(500).json({ error: err?.message || 'Sage hit an error.' });
+    const raw = err?.message || 'Sage hit an error.';
+    let clean = raw;
+    if (/api[_ ]?key/i.test(raw)) clean = 'Sage authentication failed. Check GEMINI_API_KEY on the backend.';
+    else if (/quota|rate.?limit/i.test(raw)) clean = 'Sage hit Gemini\'s free-tier rate limit. Try again in a minute.';
+    else if (/400|bad.?request|invalid/i.test(raw)) clean = 'Sage got a bad-request from Gemini. Try a different question.';
+    else if (raw.length > 200) clean = 'Sage hit an unexpected error. Try again — refresh if it persists.';
+    res.status(500).json({ error: clean });
   }
 });
 
