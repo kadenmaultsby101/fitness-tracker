@@ -1,0 +1,47 @@
+.plk-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: 100%;
+}
+
+.plk-btn {
+  width: 100%;
+  padding: 14px;
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 3px;
+  text-transform: uppercase;
+  cursor: pointer;
+  border: 1px solid transparent;
+  transition: opacity .15s, border-color .15s, color .15s;
+}
+
+.plk-pri {
+  background: var(--t1);
+  color: var(--bg);
+  border-color: var(--t1);
+}
+.plk-pri:hover:not(:disabled) { opacity: 0.85; }
+
+.plk-sec {
+  background: transparent;
+  color: var(--t2);
+  border-color: var(--b2);
+}
+.plk-sec:hover:not(:disabled) {
+  border-color: var(--b3);
+  color: var(--t1);
+}
+
+.plk-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+.plk-error {
+  background: rgba(235,159,159,0.08);
+  border: 1px solid rgba(235,159,159,0.25);
+  color: var(--red);
+  padding: 10px 12px;
+  font-size: 10px;
+  line-height: 1.6;
+  letter-spacing: 0.5px;
+}

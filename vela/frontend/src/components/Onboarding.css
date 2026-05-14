@@ -1,0 +1,426 @@
+.ob {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  background: var(--bg);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 28px 22px 40px;
+  overflow-x: hidden;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.ob::before {
+  content: '';
+  position: absolute;
+  top: -120px;
+  right: -120px;
+  width: 360px;
+  height: 360px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(255,255,255,0.025) 0%, transparent 70%);
+  pointer-events: none;
+}
+
+.ob-steps {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 36px;
+  padding-top: 8px;
+}
+
+.ob-dot {
+  width: 28px;
+  height: 2px;
+  background: var(--c3);
+  transition: background .25s ease;
+}
+
+.ob-dot.on { background: var(--t1); }
+.ob-dot.done { background: var(--t2); }
+
+.ob-card {
+  background: var(--c1);
+  border: 1px solid var(--b1);
+  width: 100%;
+  max-width: 420px;
+  padding: 28px 24px;
+  position: relative;
+  z-index: 1;
+  animation: ob-in .28s ease;
+}
+
+@keyframes ob-in {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.ob-eyebrow {
+  font-size: 8px;
+  letter-spacing: 3px;
+  text-transform: uppercase;
+  color: var(--t3);
+  margin-bottom: 12px;
+}
+
+.ob-title {
+  font-family: var(--serif);
+  font-size: 32px;
+  font-weight: 300;
+  letter-spacing: -1px;
+  line-height: 1.15;
+  margin-bottom: 10px;
+}
+
+.ob-sub {
+  font-size: 12px;
+  color: var(--t2);
+  line-height: 1.7;
+  margin-bottom: 22px;
+}
+
+.ob-field { margin-bottom: 14px; }
+
+.ob-label {
+  font-size: 9px;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: var(--t3);
+  margin-bottom: 7px;
+  display: block;
+}
+
+.ob-input {
+  width: 100%;
+  background: var(--c2);
+  border: 1px solid var(--b1);
+  color: var(--t1);
+  padding: 14px 13px;
+  font-family: var(--mono);
+  font-size: 15px;
+  outline: none;
+  transition: border-color .2s;
+}
+.ob-input:focus { border-color: var(--b2); }
+
+.ob-input.amt {
+  font-family: var(--serif);
+  font-size: 22px;
+  font-weight: 300;
+  letter-spacing: -0.5px;
+  padding: 18px 14px;
+}
+
+.ob-rows { display: flex; flex-direction: column; gap: 8px; margin-bottom: 18px; }
+
+.ob-row {
+  display: grid;
+  grid-template-columns: 1fr 110px;
+  gap: 10px;
+  align-items: center;
+}
+
+.ob-row-cat {
+  font-size: 10px;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  color: var(--t2);
+}
+
+.ob-row-input {
+  width: 100%;
+  background: var(--c2);
+  border: 1px solid var(--b1);
+  color: var(--t1);
+  padding: 10px 11px;
+  font-family: var(--mono);
+  font-size: 13px;
+  outline: none;
+  text-align: right;
+}
+.ob-row-input:focus { border-color: var(--b2); }
+.ob-row-input::placeholder { color: var(--t3); }
+
+.ob-primary {
+  width: 100%;
+  padding: 14px;
+  background: var(--t1);
+  color: var(--bg);
+  border: none;
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 3px;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: opacity .15s;
+  margin-top: 6px;
+}
+.ob-primary:hover { opacity: 0.85; }
+.ob-primary:disabled { opacity: 0.4; cursor: not-allowed; }
+
+.ob-secondary {
+  width: 100%;
+  padding: 14px;
+  background: transparent;
+  border: 1px solid var(--b2);
+  color: var(--t2);
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 3px;
+  text-transform: uppercase;
+  cursor: pointer;
+  margin-top: 10px;
+  transition: border-color .15s, color .15s;
+}
+.ob-secondary:hover { border-color: var(--b3); color: var(--t1); }
+
+.ob-skip {
+  background: none;
+  border: none;
+  color: var(--t3);
+  font-family: var(--mono);
+  font-size: 9px;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  cursor: pointer;
+  margin-top: 16px;
+  display: block;
+  width: 100%;
+  text-align: center;
+  padding: 8px;
+  transition: color .15s;
+}
+.ob-skip:hover { color: var(--t2); }
+
+.ob-error {
+  background: rgba(235,159,159,0.08);
+  border: 1px solid rgba(235,159,159,0.25);
+  color: var(--red);
+  padding: 10px 12px;
+  font-size: 10px;
+  line-height: 1.6;
+  margin-bottom: 14px;
+  letter-spacing: 0.5px;
+}
+
+.ob-note {
+  background: var(--c2);
+  border: 1px solid var(--b1);
+  color: var(--t2);
+  padding: 13px;
+  font-size: 11px;
+  line-height: 1.8;
+  margin-bottom: 18px;
+}
+.ob-note strong { color: var(--t1); }
+
+.ob-sage {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  margin-bottom: 20px;
+}
+
+.ob-sage-av {
+  width: 44px;
+  height: 44px;
+  background: var(--t1);
+  color: var(--bg);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+  flex-shrink: 0;
+}
+
+.ob-sage-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.ob-sage-nm {
+  font-family: var(--serif);
+  font-size: 20px;
+  font-weight: 300;
+  letter-spacing: -0.5px;
+}
+
+.ob-sage-st {
+  font-size: 8px;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: var(--green);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.ob-dot-live {
+  width: 4px;
+  height: 4px;
+  background: var(--green);
+  border-radius: 50%;
+  animation: bl 2s infinite;
+}
+@keyframes bl { 0%, 100% { opacity: 1; } 50% { opacity: 0.2; } }
+
+.ob-plaid-stub {
+  background: var(--c2);
+  border: 1px dashed var(--b2);
+  padding: 18px;
+  text-align: center;
+  margin-bottom: 18px;
+  font-size: 10px;
+  letter-spacing: 1.5px;
+  color: var(--t3);
+  text-transform: uppercase;
+}
+
+/* Chip grid (Step 2 situation + Step 3 motivations) */
+.ob-chip-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 18px;
+}
+
+.ob-chip {
+  padding: 10px 14px;
+  background: var(--c2);
+  border: 1px solid var(--b1);
+  color: var(--t2);
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 1px;
+  cursor: pointer;
+  transition: border-color .15s, color .15s, background .15s;
+}
+.ob-chip:hover {
+  border-color: var(--b2);
+  color: var(--t1);
+}
+.ob-chip.on {
+  background: var(--c3);
+  border-color: var(--t1);
+  color: var(--t1);
+}
+
+/* Goal tile grid (Step 4) */
+.ob-goal-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-bottom: 18px;
+}
+
+.ob-goal-tile {
+  background: var(--c2);
+  border: 1px solid var(--b1);
+  padding: 14px 12px;
+  cursor: pointer;
+  transition: all .15s;
+  text-align: left;
+  font-family: var(--mono);
+  color: var(--t1);
+}
+.ob-goal-tile:hover {
+  border-color: var(--b2);
+}
+.ob-goal-tile.on {
+  border-color: var(--green);
+  background: rgba(159,235,184,.05);
+}
+.ob-goal-em {
+  font-size: 22px;
+  margin-bottom: 8px;
+}
+.ob-goal-nm {
+  font-size: 11px;
+  letter-spacing: -0.1px;
+  color: var(--t1);
+  margin-bottom: 3px;
+}
+.ob-goal-ds {
+  font-size: 8px;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  color: var(--t3);
+  line-height: 1.5;
+}
+.ob-goal-tile.on .ob-goal-ds {
+  color: var(--green);
+}
+
+/* Budget list (Step 6) */
+.ob-budget-list {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  margin-bottom: 18px;
+}
+
+.ob-budget-row {
+  display: grid;
+  grid-template-columns: 1fr 110px;
+  gap: 12px;
+  align-items: center;
+}
+
+.ob-budget-meta {
+  min-width: 0;
+}
+
+.ob-budget-cat {
+  font-size: 11px;
+  letter-spacing: 0.2px;
+  color: var(--t1);
+  margin-bottom: 3px;
+}
+
+.ob-budget-tip {
+  font-size: 9px;
+  color: var(--t3);
+  line-height: 1.45;
+}
+
+/* Finishing handoff frame — shown briefly between Onboarding finish and MainApp mount */
+.ob-finishing {
+  justify-content: center;
+  padding: 0 22px;
+  text-align: center;
+}
+.ob-finish-wordmark {
+  font-family: var(--serif);
+  font-size: 56px;
+  font-weight: 300;
+  letter-spacing: -2px;
+  color: var(--t1);
+  margin-bottom: 18px;
+  animation: velaWelcome 1s ease-out;
+}
+.ob-finish-msg {
+  font-family: var(--serif);
+  font-size: 26px;
+  font-weight: 300;
+  letter-spacing: -0.5px;
+  color: var(--t1);
+  margin-bottom: 10px;
+}
+.ob-finish-sub {
+  font-size: 9px;
+  letter-spacing: 3px;
+  text-transform: uppercase;
+  color: var(--t3);
+  animation: velaWelcomePulse 1.8s ease-in-out infinite;
+}
+@keyframes velaWelcome {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes velaWelcomePulse {
+  0%, 100% { opacity: 1; }
+  50%      { opacity: 0.4; }
+}
