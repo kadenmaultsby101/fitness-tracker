@@ -4,6 +4,16 @@ import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, ReferenceL
 
 const DEFAULT_GOALS = { calories: 3200, protein: 150, water: 128, weightGoal: 180 };
 const SUPPLEMENTS = ["Creatine", "Protein Shake"];
+const GEMINI_MODEL = "gemini-2.5-flash";
+const GEMINI_API_KEY = process.env.REACT_APP_GEMINI_API_KEY;
+const OURA_TOKEN = process.env.REACT_APP_OURA_TOKEN;
+const COACH_PROMPTS = [
+  "How am I doing this week?",
+  "What should I eat to hit my protein goal today?",
+  "Am I training too much? Should I take a rest day?",
+  "Analyze my weight progress toward 180lbs",
+  "What's the weakest part of my routine right now?",
+];
 const DAYS = ["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"];
 const TYPE_COLORS = { gym: "#00C805", mma: "#FF6B35", climbing: "#4A9EFF" };
 const TYPE_LABELS = { gym: "GYM", mma: "MMA", climbing: "CLIMB" };
@@ -43,14 +53,6 @@ const QUICK_FOODS = [
   { name: "Chipotle Double Chicken Bowl", calories: 1050, protein: 57 },
   { name: "Coconut Water", calories: 120, protein: 2 },
 ];
-
-const WORKOUT_TEMPLATES = {
-  "Chest & Triceps": ["Chest Press Machine","Incline Press Machine","Pec Deck","Tricep Pushdown","Dumbbell Kickbacks","Overhead Tricep Extension","Dips"],
-  "Back & Shoulders": ["Lower Back Press","Vertical Traction","Low Row","Shoulder Press","Lateral Raises","Trap Shrugs"],
-  "Arms": ["Bicep Curl","Hammer Curl","Tricep Pushdown","Overhead Tricep Extension"],
-  "Full Body": ["Chest Press Machine","Low Row","Shoulder Press","Bicep Curl","Tricep Pushdown","Lateral Raises"],
-  "Custom": [],
-};
 
 function todayStr() { return new Date().toLocaleDateString("en-CA", { timeZone: "America/Los_Angeles" }); }
 function getDayName(ds) { const d = new Date(ds + "T12:00:00"); return DAYS[d.getDay() === 0 ? 6 : d.getDay() - 1]; }
@@ -116,17 +118,17 @@ export default function App() {
   const [goals, setGoals] = useState(DEFAULT_GOALS);
   const [editingGoals, setEditingGoals] = useState(false);
   const [goalsInput, setGoalsInput] = useState({ ...DEFAULT_GOALS });
-  const [workoutSubTab, setWorkoutSubTab] = useState("log");
-  const [selectedTemplate, setSelectedTemplate] = useState("Chest & Triceps");
-  const [currentWorkout, setCurrentWorkout] = useState([]);
   const [workoutHistory, setWorkoutHistory] = useState([]);
-  const [addingExercise, setAddingExercise] = useState(null);
-  const [setInput, setSetInput] = useState({ weight: "", reps: "" });
-  const [customExercise, setCustomExercise] = useState("");
   const [history, setHistory] = useState([]);
   const [historyTab, setHistoryTab] = useState("overview");
   const [selectedPastDay, setSelectedPastDay] = useState(null);
   const [selectedDay, setSelectedDay] = useState(getTodayName());
+  const [coachMessages, setCoachMessages] = useState([]);
+  const [coachInput, setCoachInput] = useState("");
+  const [coachLoading, setCoachLoading] = useState(false);
+  const [oura, setOura] = useState(null);
+  const [ouraLoading, setOuraLoading] = useState(false);
+  const [ouraError, setOuraError] = useState(null);
   const today = getTodayName();
 
   const showToast = (msg, isError = false) => { setToast({ msg, isError }); setTimeout(() => setToast(null), 2500); };
@@ -166,7 +168,42 @@ export default function App() {
     } catch (_) {}
   }, []);
 
-  useEffect(() => { loadToday(); loadHistory(); loadWorkoutHistory(); loadGoals(); }, [loadToday, loadHistory, loadWorkoutHistory, loadGoals]);
+  const loadOura = useCallback(async () => {
+    if (!OURA_TOKEN) { setOuraError("Add REACT_APP_OURA_TOKEN to Vercel env vars"); return; }
+    setOuraLoading(true); setOuraError(null);
+    const end = todayStr();
+    const start = new Date(Date.now() - 2 * 86400000).toLocaleDateString("en-CA", { timeZone: "America/Los_Angeles" });
+    const headers = { Authorization: `Bearer ${OURA_TOKEN}` };
+    try {
+      const [sleepRes, readyRes, detailRes] = await Promise.all([
+        fetch(`https://api.ouraring.com/v2/usercollection/daily_sleep?start_date=${start}&end_date=${end}`, { headers }),
+        fetch(`https://api.ouraring.com/v2/usercollection/daily_readiness?start_date=${start}&end_date=${end}`, { headers }),
+        fetch(`https://api.ouraring.com/v2/usercollection/sleep?start_date=${start}&end_date=${end}`, { headers }),
+      ]);
+      if (!sleepRes.ok) throw new Error(`Sleep API ${sleepRes.status}: ${(await sleepRes.text()).slice(0,120)}`);
+      if (!readyRes.ok) throw new Error(`Readiness API ${readyRes.status}`);
+      const sleepData = await sleepRes.json();
+      const readyData = await readyRes.json();
+      const detailData = detailRes.ok ? await detailRes.json() : { data: [] };
+      const latestSleep = (sleepData.data || []).sort((a,b) => b.day.localeCompare(a.day))[0];
+      const latestReady = (readyData.data || []).sort((a,b) => b.day.localeCompare(a.day))[0];
+      const latestDetail = (detailData.data || []).filter(s => s.type === "long_sleep" || s.type === "sleep").sort((a,b) => b.day.localeCompare(a.day))[0];
+      setOura({
+        date: latestSleep?.day || latestReady?.day,
+        sleepScore: latestSleep?.score ?? null,
+        readinessScore: latestReady?.score ?? null,
+        totalSleepSec: latestDetail?.total_sleep_duration ?? null,
+        remSec: latestDetail?.rem_sleep_duration ?? null,
+        deepSec: latestDetail?.deep_sleep_duration ?? null,
+        efficiency: latestDetail?.efficiency ?? null,
+        restingHr: latestReady?.contributors?.resting_heart_rate ?? latestDetail?.lowest_heart_rate ?? null,
+        hrv: latestDetail?.average_hrv ?? null,
+      });
+    } catch (e) { setOuraError(e.message); }
+    setOuraLoading(false);
+  }, []);
+
+  useEffect(() => { loadToday(); loadHistory(); loadWorkoutHistory(); loadGoals(); loadOura(); }, [loadToday, loadHistory, loadWorkoutHistory, loadGoals, loadOura]);
 
   const saveDay = async (updates) => {
     const merged = {
@@ -224,27 +261,60 @@ export default function App() {
       supplements: merged.supplements,
     }, { onConflict: "date" }).then(() => loadHistory()).catch(() => showToast("Save failed", true));
   };
-  const getLastSession = (tmpl) => workoutHistory.find(w => w.workout_type === tmpl);
-  const addSet = (exerciseName) => {
-    if (!setInput.reps) return;
-    const ns = { weight: Number(setInput.weight)||0, reps: Number(setInput.reps) };
-    const ex = currentWorkout.find(e => e.name === exerciseName);
-    if (ex) setCurrentWorkout(p => p.map(e => e.name === exerciseName ? { ...e, sets: [...e.sets, ns] } : e));
-    else setCurrentWorkout(p => [...p, { name: exerciseName, sets: [ns] }]);
-    setSetInput({ weight: "", reps: "" }); setAddingExercise(null); showToast("Set logged");
-  };
-  const removeSet = (name, idx) => setCurrentWorkout(p => p.map(e => e.name === name ? { ...e, sets: e.sets.filter((_, i) => i !== idx) } : e).filter(e => e.sets.length > 0));
-  const saveWorkout = async () => {
-    if (!currentWorkout.length) return;
-    try { await supabase.from("workout_logs").insert({ date: todayStr(), day_name: today, workout_type: selectedTemplate, exercises: currentWorkout }); showToast("Workout saved!"); setCurrentWorkout([]); loadWorkoutHistory(); }
-    catch (_) { showToast("Save failed - run SQL setup", true); }
-  };
   const saveWeight = () => { const w = parseFloat(weightInput); if (!w) return; saveDay({ weight: w }); showToast("Weight logged: " + w + " lbs"); };
   const resetDay = async () => {
     const r = { calories: 0, protein: 0, water: 0, food_log: [], completed_workouts: [], weight: null, supplements: [] };
     setDayData(r); setWeightInput("");
     try { await supabase.from("daily_logs").upsert({ date: todayStr(), ...r }, { onConflict: "date" }); } catch (_) {}
     loadHistory();
+  };
+
+  const buildCoachContext = () => ({
+    profile: { name: "Kaden", age: 18, height: "6'1\"", startWeight, currentWeight, location: "Oakland, CA", training: ["MMA (boxing, jiu jitsu, muay thai)", "rock climbing", "weightlifting"] },
+    goals,
+    today: { date: todayStr(), day: today, calories: dayData.calories, protein: dayData.protein, water: dayData.water, weight: dayData.weight, supplements: dayData.supplements || [], completed_workouts: dayData.completed_workouts || [], food_log: dayData.food_log || [], scheduled: SCHEDULE[today] || [] },
+    streaks: { nutrition: getNutritionStreak(), gym: getGymStreak(), supplements: getSuppStreak() },
+    last14days: history.slice(0, 14).map(d => ({ date: d.date, day: getDayName(d.date), calories: d.calories, protein: d.protein, water: d.water, weight: d.weight, supplements: d.supplements || [], completed_workouts: d.completed_workouts || [] })),
+    recentWorkouts: workoutHistory.slice(0, 5).map(w => ({ date: w.date, type: w.workout_type, exercises: w.exercises })),
+    weeklySchedule: SCHEDULE,
+  });
+  const askCoach = async () => {
+    const q = coachInput.trim();
+    if (!q || coachLoading) return;
+    if (!GEMINI_API_KEY) {
+      setCoachMessages(m => [...m, { role: "user", text: q }, { role: "coach", text: "Missing API key. Add REACT_APP_GEMINI_API_KEY to your Vercel env vars (and local .env), then redeploy." }]);
+      setCoachInput("");
+      return;
+    }
+    const convo = [...coachMessages, { role: "user", text: q }];
+    setCoachMessages(convo);
+    setCoachInput("");
+    setCoachLoading(true);
+    const ctx = buildCoachContext();
+    const systemPrompt = `You are Pulse Coach, Kaden's personal AI fitness coach. He's 18, 6'1", in Oakland CA, bulking from 160 to 180lbs while training MMA, rock climbing, and lifting.
+
+You have full visibility into his nutrition, training, weight, supplements, and schedule (JSON below). Reference specific numbers and patterns. Be direct, motivating, concise — like a coach who actually knows him. No fluff. 2-4 short paragraphs max. Use plain text, no markdown headers.
+
+DATA:
+${JSON.stringify(ctx, null, 2)}`;
+    try {
+      const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${GEMINI_API_KEY}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          systemInstruction: { parts: [{ text: systemPrompt }] },
+          contents: convo.map(m => ({ role: m.role === "user" ? "user" : "model", parts: [{ text: m.text }] })),
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error?.message || `HTTP ${res.status}`);
+      const text = data?.candidates?.[0]?.content?.parts?.[0]?.text;
+      if (!text) throw new Error("Empty response from Gemini");
+      setCoachMessages(m => [...m, { role: "coach", text }]);
+    } catch (e) {
+      setCoachMessages(m => [...m, { role: "coach", text: `Error: ${e.message}\n\nCheck: 1) REACT_APP_GEMINI_API_KEY is set on Vercel, 2) the key is valid at aistudio.google.com, 3) you redeployed after adding it.` }]);
+    }
+    setCoachLoading(false);
   };
 
   const getNutritionStreak = () => { let s = 0; for (const d of [...history].sort((a,b) => b.date.localeCompare(a.date))) { if ((d.calories||0) >= goals.calories*0.85 && (d.protein||0) >= goals.protein*0.85) s++; else break; } return s; };
@@ -307,8 +377,6 @@ export default function App() {
   const startWeight = weightData[0]?.weight || 160;
   const currentWeight = weightData.at(-1)?.weight || dayData.weight || startWeight;
   const weightPct = Math.max(0, Math.min(((currentWeight - startWeight) / (goals.weightGoal - startWeight)) * 100, 100));
-  const allExercises = [...(WORKOUT_TEMPLATES[selectedTemplate]||[]), ...currentWorkout.filter(e => !(WORKOUT_TEMPLATES[selectedTemplate]||[]).includes(e.name)).map(e => e.name)];
-  const lastSession = getLastSession(selectedTemplate);
 
   if (loading) return (
     <div style={{ minHeight:"100vh", background:C.bg, display:"flex", alignItems:"center", justifyContent:"center", flexDirection:"column", gap:"20px", fontFamily:C.font }}>
@@ -341,7 +409,7 @@ export default function App() {
       </div>
 
       <div style={{ display:"flex", background:C.bg, borderBottom:`1px solid ${C.border}`, position:"sticky", top:"86px", zIndex:9 }}>
-        {[["today","Today"],["workout","Workout"],["history","History"],["week","Week"],["schedule","Schedule"]].map(([k,l]) => tabBtn(k,l))}
+        {[["today","Today"],["coach","Coach"],["history","History"],["week","Week"],["schedule","Schedule"]].map(([k,l]) => tabBtn(k,l))}
       </div>
 
       <div style={{ padding:"16px", paddingBottom:"48px" }}>
@@ -385,6 +453,46 @@ export default function App() {
                   </div>
                 ))}
               </div>
+            </Card>
+
+            <Card accent={C.purple}>
+              <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:"14px" }}>
+                <Lbl color={C.purple} style={{ marginBottom:0 }}>Recovery · Oura</Lbl>
+                <button onClick={loadOura} disabled={ouraLoading} style={{ background:"none", border:`1px solid ${C.border}`, borderRadius:"20px", padding:"5px 12px", color:C.textSub, cursor: ouraLoading ? "wait":"pointer", fontSize:"11px", fontFamily:C.font }}>{ouraLoading ? "..." : "↻"}</button>
+              </div>
+              {ouraError ? (
+                <div style={{ fontSize:"12px", color:C.red, lineHeight:1.5 }}>{ouraError}</div>
+              ) : !oura ? (
+                <div style={{ fontSize:"12px", color:C.textSub }}>{ouraLoading ? "Loading…" : "No data yet"}</div>
+              ) : (
+                <div>
+                  <div style={{ display:"flex", gap:"8px", marginBottom:"12px" }}>
+                    {[{label:"Sleep",value:oura.sleepScore,color:C.blue},{label:"Readiness",value:oura.readinessScore,color:C.purple}].map(({label,value,color}) => (
+                      <div key={label} style={{ flex:1, background:C.surfaceUp, borderRadius:C.rSm, padding:"12px", border:`1px solid ${color}25`, textAlign:"center" }}>
+                        <div style={{ fontSize:"11px", color:C.textSub, marginBottom:"4px" }}>{label}</div>
+                        <div style={{ fontSize:"26px", fontWeight:"700", color }}>{value ?? "—"}</div>
+                        <div style={{ height:"3px", background:C.border, borderRadius:"2px", marginTop:"8px" }}>
+                          <div style={{ height:"100%", width:(value||0)+"%", background:color, borderRadius:"2px" }} />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                  <div style={{ display:"flex", justifyContent:"space-between", gap:"6px", flexWrap:"wrap" }}>
+                    {[
+                      {label:"Total", value: oura.totalSleepSec ? Math.floor(oura.totalSleepSec/3600) + "h " + Math.round((oura.totalSleepSec%3600)/60) + "m" : "—"},
+                      {label:"REM", value: oura.remSec ? Math.round(oura.remSec/60) + "m" : "—"},
+                      {label:"Deep", value: oura.deepSec ? Math.round(oura.deepSec/60) + "m" : "—"},
+                      {label:"Resting HR", value: oura.restingHr ? oura.restingHr + " bpm" : "—"},
+                      {label:"HRV", value: oura.hrv ? Math.round(oura.hrv) + " ms" : "—"},
+                    ].map(({label,value}) => (
+                      <div key={label} style={{ flex:"1 1 auto", textAlign:"center" }}>
+                        <div style={{ fontSize:"13px", fontWeight:"600", color:C.text }}>{value}</div>
+                        <div style={{ fontSize:"10px", color:C.textSub, marginTop:"2px" }}>{label}</div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </Card>
 
             <Card>
@@ -534,122 +642,43 @@ export default function App() {
           </div>
         )}
 
-        {tab === "workout" && (
+        {tab === "coach" && (
           <div>
-            <div style={{ display:"flex", gap:"8px", marginBottom:"16px" }}>
-              <PillBtn onClick={() => setWorkoutSubTab("log")} active={workoutSubTab==="log"}>Log Workout</PillBtn>
-              <PillBtn onClick={() => setWorkoutSubTab("history")} active={workoutSubTab==="history"}>History</PillBtn>
-            </div>
+            <Card accent={C.purple}>
+              <Lbl color={C.purple}>Pulse Coach</Lbl>
+              <div style={{ fontSize:"13px", color:C.textSub, lineHeight:1.5 }}>AI coach with full context of your nutrition, training, weight, and schedule. Ask anything.</div>
+            </Card>
 
-            {workoutSubTab === "log" && (
-              <div>
-                <Card>
-                  <Lbl>Workout Type</Lbl>
-                  <div style={{ display:"flex", gap:"6px", flexWrap:"wrap" }}>
-                    {Object.keys(WORKOUT_TEMPLATES).map(type => (
-                      <PillBtn key={type} onClick={() => { setSelectedTemplate(type); setCurrentWorkout([]); setAddingExercise(null); }} active={selectedTemplate===type}>{type}</PillBtn>
-                    ))}
-                  </div>
-                </Card>
+            {coachMessages.length === 0 && (
+              <Card>
+                <Lbl>Try asking</Lbl>
+                <div style={{ display:"flex", flexDirection:"column", gap:"6px" }}>
+                  {COACH_PROMPTS.map((p,i) => (
+                    <button key={i} onClick={() => setCoachInput(p)} style={{ background:C.surfaceUp, border:`1px solid ${C.border}`, borderRadius:C.rSm, padding:"12px 14px", color:C.text, fontSize:"13px", textAlign:"left", cursor:"pointer", fontFamily:C.font, lineHeight:1.4 }}>{p}</button>
+                  ))}
+                </div>
+              </Card>
+            )}
 
-                {lastSession && (
-                  <Card accent={C.blue}>
-                    <Lbl color={C.blue}>{"Last Session - " + fmt(lastSession.date)}</Lbl>
-                    {(lastSession.exercises||[]).map((ex,i) => (
-                      <div key={i} style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"8px 0", borderBottom:`1px solid ${C.border}` }}>
-                        <div style={{ fontSize:"13px" }}>{ex.name}</div>
-                        <div style={{ display:"flex", gap:"4px" }}>
-                          {(ex.sets||[]).map((set,si) => (
-                            <span key={si} style={{ background:C.surfaceUp, borderRadius:"6px", padding:"3px 8px", fontSize:"11px" }}>
-                              {set.weight > 0 && <span style={{ color:C.orange }}>{set.weight + "lb "}</span>}
-                              <span style={{ color:C.blue }}>{"×" + set.reps}</span>
-                            </span>
-                          ))}
-                        </div>
-                      </div>
-                    ))}
-                  </Card>
-                )}
+            {coachMessages.map((m,i) => (
+              <div key={i} style={{ marginBottom:"10px", display:"flex", justifyContent: m.role==="user" ? "flex-end" : "flex-start" }}>
+                <div style={{ maxWidth:"86%", background: m.role==="user" ? C.accent : C.surface, color: m.role==="user" ? "#000" : C.text, padding:"12px 14px", borderRadius:C.rSm, fontSize:"14px", lineHeight:1.5, whiteSpace:"pre-wrap", border: m.role==="user" ? "none" : `1px solid ${C.border}`, fontWeight: m.role==="user" ? "500" : "400" }}>{m.text}</div>
+              </div>
+            ))}
 
-                <Card>
-                  <Lbl>Log Sets</Lbl>
-                  {allExercises.map((exercise, i) => {
-                    const logged = currentWorkout.find(e => e.name === exercise);
-                    const isAdding = addingExercise === exercise;
-                    return (
-                      <div key={i} style={{ marginBottom:"10px", background:C.surfaceUp, borderRadius:C.rSm, padding:"14px", border:`1px solid ${logged ? C.accentBorder : C.border}` }}>
-                        <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center" }}>
-                          <div style={{ fontSize:"14px", fontWeight:"600", color: logged ? C.accent : C.text }}>{exercise}</div>
-                          <button onClick={() => setAddingExercise(isAdding ? null : exercise)} style={{ background:C.accentBg, border:`1px solid ${C.accentBorder}`, borderRadius:"16px", padding:"5px 12px", color:C.accent, cursor:"pointer", fontSize:"12px", fontWeight:"600", fontFamily:C.font }}>+ Set</button>
-                        </div>
-                        {logged && logged.sets.length > 0 && (
-                          <div style={{ marginTop:"10px", display:"flex", gap:"6px", flexWrap:"wrap" }}>
-                            {logged.sets.map((set,si) => (
-                              <div key={si} style={{ background:C.bg, border:`1px solid ${C.border}`, borderRadius:"8px", padding:"5px 10px", display:"flex", alignItems:"center", gap:"8px" }}>
-                                <span style={{ fontSize:"12px" }}>
-                                  {set.weight > 0 && <span style={{ color:C.orange, fontWeight:"600" }}>{set.weight + "lb "}</span>}
-                                  <span style={{ color:C.accent, fontWeight:"600" }}>{"×" + set.reps}</span>
-                                </span>
-                                <button onClick={() => removeSet(exercise, si)} style={{ background:"none", border:"none", color:C.textDim, cursor:"pointer", fontSize:"11px" }}>✕</button>
-                              </div>
-                            ))}
-                          </div>
-                        )}
-                        {isAdding && (
-                          <div style={{ marginTop:"12px", display:"flex", gap:"8px" }}>
-                            <Inp type="number" placeholder="lbs" value={setInput.weight} onChange={e => setSetInput({...setInput, weight:e.target.value})} style={{ color:C.orange, textAlign:"center", padding:"10px" }} />
-                            <Inp type="number" placeholder="reps" value={setInput.reps} onChange={e => setSetInput({...setInput, reps:e.target.value})} onKeyDown={e => e.key==="Enter" && addSet(exercise)} style={{ color:C.accent, textAlign:"center", padding:"10px" }} autoFocus />
-                            <button onClick={() => addSet(exercise)} style={{ background:C.accent, border:"none", borderRadius:C.rSm, padding:"10px 16px", color:"#000", fontWeight:"700", cursor:"pointer", fontFamily:C.font, fontSize:"14px", flexShrink:0 }}>Log</button>
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })}
-                  <div style={{ display:"flex", gap:"8px", marginTop:"4px" }}>
-                    <Inp placeholder="Add custom exercise..." value={customExercise} onChange={e => setCustomExercise(e.target.value)} onKeyDown={e => { if (e.key==="Enter" && customExercise.trim()) { setAddingExercise(customExercise); setCustomExercise(""); }}} />
-                    <button onClick={() => { if (customExercise.trim()) { setAddingExercise(customExercise); setCustomExercise(""); }}} style={{ background:C.surfaceUp, border:`1px solid ${C.border}`, borderRadius:C.rSm, padding:"12px 16px", color:C.textSub, cursor:"pointer", fontFamily:C.font, fontSize:"18px", flexShrink:0 }}>+</button>
-                  </div>
-                </Card>
-
-                {currentWorkout.length > 0 && (
-                  <button onClick={saveWorkout} style={{ width:"100%", background:C.accent, border:"none", borderRadius:C.r, padding:"16px", color:"#000", fontWeight:"700", fontSize:"15px", cursor:"pointer", fontFamily:C.font, marginBottom:"12px" }}>Save Workout</button>
-                )}
+            {coachLoading && (
+              <div style={{ marginBottom:"10px", display:"flex", justifyContent:"flex-start" }}>
+                <div style={{ background:C.surface, color:C.textSub, padding:"12px 14px", borderRadius:C.rSm, fontSize:"13px", border:`1px solid ${C.border}`, fontStyle:"italic" }}>Coach is thinking…</div>
               </div>
             )}
 
-            {workoutSubTab === "history" && (
-              <div>
-                {!workoutHistory.length ? (
-                  <Card style={{ textAlign:"center", padding:"48px 20px" }}>
-                    <div style={{ fontSize:"36px", marginBottom:"12px" }}>💪</div>
-                    <div style={{ fontSize:"15px", fontWeight:"600", marginBottom:"6px" }}>No workouts yet</div>
-                    <div style={{ fontSize:"13px", color:C.textSub }}>Start logging to see history</div>
-                  </Card>
-                ) : workoutHistory.map((w,i) => (
-                  <Card key={i} accent={C.accent}>
-                    <div style={{ display:"flex", justifyContent:"space-between", marginBottom:"12px" }}>
-                      <div>
-                        <div style={{ fontSize:"15px", fontWeight:"700" }}>{w.workout_type}</div>
-                        <div style={{ fontSize:"12px", color:C.textSub, marginTop:"3px" }}>{w.day_name + " · " + fmt(w.date)}</div>
-                      </div>
-                      <div style={{ fontSize:"12px", color:C.textSub }}>{(w.exercises||[]).length + " exercises"}</div>
-                    </div>
-                    {(w.exercises||[]).map((ex,ei) => (
-                      <div key={ei} style={{ paddingTop:"10px", borderTop:`1px solid ${C.border}` }}>
-                        <div style={{ fontSize:"13px", fontWeight:"600", marginBottom:"6px" }}>{ex.name}</div>
-                        <div style={{ display:"flex", gap:"6px", flexWrap:"wrap" }}>
-                          {(ex.sets||[]).map((set,si) => (
-                            <span key={si} style={{ background:C.surfaceUp, border:`1px solid ${C.border}`, borderRadius:"8px", padding:"4px 10px", fontSize:"12px" }}>
-                              {set.weight > 0 && <span style={{ color:C.orange, fontWeight:"600" }}>{set.weight + "lb "}</span>}
-                              <span style={{ color:C.accent, fontWeight:"600" }}>{"×" + set.reps}</span>
-                            </span>
-                          ))}
-                        </div>
-                      </div>
-                    ))}
-                  </Card>
-                ))}
-              </div>
+            <div style={{ position:"sticky", bottom:"8px", background:C.bg, paddingTop:"10px", display:"flex", gap:"8px", marginTop:"8px" }}>
+              <Inp placeholder="Ask your coach..." value={coachInput} onChange={e => setCoachInput(e.target.value)} onKeyDown={e => e.key === "Enter" && askCoach()} />
+              <button onClick={askCoach} disabled={coachLoading || !coachInput.trim()} style={{ background: coachLoading || !coachInput.trim() ? C.surfaceUp : C.accent, border:"none", borderRadius:C.rSm, padding:"12px 18px", color: coachLoading || !coachInput.trim() ? C.textDim : "#000", fontWeight:"700", cursor: coachLoading || !coachInput.trim() ? "not-allowed" : "pointer", fontFamily:C.font, fontSize:"14px", flexShrink:0 }}>Send</button>
+            </div>
+
+            {coachMessages.length > 0 && (
+              <button onClick={() => setCoachMessages([])} style={{ width:"100%", background:"transparent", border:`1px solid ${C.border}`, borderRadius:C.rSm, padding:"10px", color:C.textSub, fontSize:"12px", cursor:"pointer", fontFamily:C.font, marginTop:"12px" }}>Clear chat</button>
             )}
           </div>
         )}
