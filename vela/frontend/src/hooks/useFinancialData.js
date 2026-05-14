@@ -136,8 +136,17 @@ export function useFinancialData() {
   };
 }
 
+// Credit cards and loans report `balance_current` as the AMOUNT OWED (a
+// positive number) — Plaid's convention. So they subtract from net worth,
+// not add. Treat any account whose type is 'credit' or 'loan' as debt.
+function signedBalance(a) {
+  const bal = Number(a?.balance_current) || 0;
+  const isDebt = a?.type === 'credit' || a?.type === 'loan';
+  return isDebt ? -bal : bal;
+}
+
 function derive({ accounts, transactions }) {
-  const netWorth = accounts.reduce((s, a) => s + (Number(a.balance_current) || 0), 0);
+  const netWorth = accounts.reduce((s, a) => s + signedBalance(a), 0);
 
   const { start, end } = monthBounds();
   const inMonth = transactions.filter((t) => t.date >= start && t.date < end);

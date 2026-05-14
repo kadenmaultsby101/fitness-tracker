@@ -178,23 +178,29 @@ export default function HomePage({ data, session, onAddTxn, onAddAccount, onEdit
         <SkeletonAccounts />
       ) : (
         <div className="acc-scr">
-          {accounts.map((a) => (
-            <div
-              key={a.id}
-              className="am"
-              onClick={() => onEditAccount?.(a)}
-              role="button"
-              tabIndex={0}
-              style={{ cursor: onEditAccount ? 'pointer' : 'default' }}
-            >
-              <div className="am-inst">{a.subtype || a.type}</div>
-              <div className="am-nm">
-                {displayAccountName(a)}
-                {a.mask ? ` ··${a.mask}` : ''}
+          {accounts.map((a) => {
+            const isDebt = a.type === 'credit' || a.type === 'loan';
+            const bal = Number(a.balance_current) || 0;
+            return (
+              <div
+                key={a.id}
+                className="am"
+                onClick={() => onEditAccount?.(a)}
+                role="button"
+                tabIndex={0}
+                style={{ cursor: onEditAccount ? 'pointer' : 'default' }}
+              >
+                <div className="am-inst">{a.subtype || a.type}</div>
+                <div className="am-nm">
+                  {displayAccountName(a)}
+                  {a.mask ? ` ··${a.mask}` : ''}
+                </div>
+                <div className="am-bal" style={isDebt ? { color: 'var(--red)' } : undefined}>
+                  {isDebt ? '−' : ''}{money(bal)}
+                </div>
               </div>
-              <div className="am-bal">{money(a.balance_current)}</div>
-            </div>
-          ))}
+            );
+          })}
           <div className="am add" onClick={onAddAccount} role="button">+</div>
         </div>
       )}

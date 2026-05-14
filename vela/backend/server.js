@@ -192,7 +192,14 @@ app.post('/api/sage', async (req, res) => {
     const goals = goalsRes.data || [];
     const budgets = budgetsRes.data || [];
 
-    const netWorth = accounts.reduce((s, a) => s + (Number(a.balance_current) || 0), 0);
+    // Credit cards and loans report balance_current as the amount OWED.
+    // Treat them as negative for net worth, matching the frontend logic in
+    // useFinancialData.derive().
+    const netWorth = accounts.reduce((s, a) => {
+      const bal = Number(a.balance_current) || 0;
+      const isDebt = a.type === 'credit' || a.type === 'loan';
+      return s + (isDebt ? -bal : bal);
+    }, 0);
     const firstName = (profile.name || '').split(' ')[0] || 'there';
     const fmt = (n) => '$' + Number(n || 0).toLocaleString('en-US', { maximumFractionDigits: 0 });
     const ob = profile.onboarding_data || {};

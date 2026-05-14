@@ -238,17 +238,28 @@ export default function MorePage({ data, session, onSignOut }) {
             None yet.
           </div>
         ) : (
-          accounts.map((a) => (
-            <div key={a.id} className="sr">
-              <div>
-                <div className="sr-l">{a.name}{a.mask ? ` ··${a.mask}` : ''}</div>
-                <div className="sr-s">{a.subtype || a.type}</div>
+          accounts.map((a) => {
+            const isDebt = a.type === 'credit' || a.type === 'loan';
+            const bal = Number(a.balance_current) || 0;
+            return (
+              <div key={a.id} className="sr">
+                <div>
+                  <div className="sr-l">{a.name}{a.mask ? ` ··${a.mask}` : ''}</div>
+                  <div className="sr-s">{a.subtype || a.type}</div>
+                </div>
+                <div
+                  style={{
+                    fontFamily: 'var(--serif)',
+                    fontSize: 16,
+                    fontWeight: 300,
+                    color: isDebt ? 'var(--red)' : undefined,
+                  }}
+                >
+                  {isDebt ? '−' : ''}{money(bal)}
+                </div>
               </div>
-              <div style={{ fontFamily: 'var(--serif)', fontSize: 16, fontWeight: 300 }}>
-                {money(a.balance_current)}
-              </div>
-            </div>
-          ))
+            );
+          })
         )}
       </div>
 
