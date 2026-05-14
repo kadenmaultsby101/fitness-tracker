@@ -129,6 +129,7 @@ export default function App() {
   const [oura, setOura] = useState(null);
   const [ouraLoading, setOuraLoading] = useState(false);
   const [ouraError, setOuraError] = useState(null);
+  const [waterInput, setWaterInput] = useState("");
   const today = getTodayName();
 
   const showToast = (msg, isError = false) => { setToast({ msg, isError }); setTimeout(() => setToast(null), 2500); };
@@ -409,7 +410,7 @@ ${JSON.stringify(ctx, null, 2)}`;
       </div>
 
       <div style={{ display:"flex", background:C.bg, borderBottom:`1px solid ${C.border}`, position:"sticky", top:"86px", zIndex:9 }}>
-        {[["today","Today"],["coach","Coach"],["history","History"],["week","Week"],["schedule","Schedule"]].map(([k,l]) => tabBtn(k,l))}
+        {[["today","Today"],["history","History"],["coach","Coach"],["week","Week"],["schedule","Schedule"]].map(([k,l]) => tabBtn(k,l))}
       </div>
 
       <div style={{ padding:"16px", paddingBottom:"48px" }}>
@@ -555,10 +556,11 @@ ${JSON.stringify(ctx, null, 2)}`;
                 <Lbl style={{ marginBottom:0 }}>Water</Lbl>
                 <div style={{ fontSize:"13px", fontWeight:"600", color:"#4CD5FF" }}>{dayData.water + "oz"} <span style={{ color:C.textDim }}>{"/ " + goals.water + "oz"}</span></div>
               </div>
-              <div style={{ marginBottom:"10px" }}>
+              <div style={{ marginBottom:"14px" }}>
                 <div style={{ fontSize:"11px", color:C.textDim, marginBottom:"8px" }}>ADD</div>
-                <div style={{ display:"flex", gap:"6px", flexWrap:"wrap" }}>
-                  {[8,16,20,26,32].map(oz => <button key={oz} onClick={() => addWater(oz)} style={{ background:"rgba(76,213,255,0.08)", border:"1px solid rgba(76,213,255,0.2)", color:"#4CD5FF", padding:"8px 12px", borderRadius:"20px", cursor:"pointer", fontSize:"12px", fontWeight:"600", fontFamily:C.font }}>{"+"+oz+"oz"}</button>)}
+                <div style={{ display:"flex", gap:"8px" }}>
+                  <Inp type="number" inputMode="numeric" placeholder="Enter oz" value={waterInput} onChange={e => setWaterInput(e.target.value)} onKeyDown={e => { if (e.key === "Enter") { const oz = Number(waterInput); if (oz > 0) { addWater(oz); setWaterInput(""); } } }} style={{ color:"#4CD5FF" }} />
+                  <button onClick={() => { const oz = Number(waterInput); if (oz > 0) { addWater(oz); setWaterInput(""); } }} style={{ background:"rgba(76,213,255,0.12)", border:"1px solid rgba(76,213,255,0.3)", borderRadius:C.rSm, padding:"12px 18px", color:"#4CD5FF", cursor:"pointer", fontWeight:"700", fontFamily:C.font, fontSize:"14px", flexShrink:0 }}>Add</button>
                 </div>
               </div>
               <div style={{ fontSize:"11px", color:C.textDim, marginBottom:"8px" }}>REMOVE</div>
