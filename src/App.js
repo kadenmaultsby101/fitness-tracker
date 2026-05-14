@@ -54,14 +54,6 @@ const QUICK_FOODS = [
   { name: "Coconut Water", calories: 120, protein: 2 },
 ];
 
-const WORKOUT_TEMPLATES = {
-  "Chest & Triceps": ["Chest Press Machine","Incline Press Machine","Pec Deck","Tricep Pushdown","Dumbbell Kickbacks","Overhead Tricep Extension","Dips"],
-  "Back & Shoulders": ["Lower Back Press","Vertical Traction","Low Row","Shoulder Press","Lateral Raises","Trap Shrugs"],
-  "Arms": ["Bicep Curl","Hammer Curl","Tricep Pushdown","Overhead Tricep Extension"],
-  "Full Body": ["Chest Press Machine","Low Row","Shoulder Press","Bicep Curl","Tricep Pushdown","Lateral Raises"],
-  "Custom": [],
-};
-
 function todayStr() { return new Date().toLocaleDateString("en-CA", { timeZone: "America/Los_Angeles" }); }
 function getDayName(ds) { const d = new Date(ds + "T12:00:00"); return DAYS[d.getDay() === 0 ? 6 : d.getDay() - 1]; }
 function getTodayName() { return getDayName(todayStr()); }
@@ -126,13 +118,7 @@ export default function App() {
   const [goals, setGoals] = useState(DEFAULT_GOALS);
   const [editingGoals, setEditingGoals] = useState(false);
   const [goalsInput, setGoalsInput] = useState({ ...DEFAULT_GOALS });
-  const [workoutSubTab, setWorkoutSubTab] = useState("log");
-  const [selectedTemplate, setSelectedTemplate] = useState("Chest & Triceps");
-  const [currentWorkout, setCurrentWorkout] = useState([]);
   const [workoutHistory, setWorkoutHistory] = useState([]);
-  const [addingExercise, setAddingExercise] = useState(null);
-  const [setInput, setSetInput] = useState({ weight: "", reps: "" });
-  const [customExercise, setCustomExercise] = useState("");
   const [history, setHistory] = useState([]);
   const [historyTab, setHistoryTab] = useState("overview");
   const [selectedPastDay, setSelectedPastDay] = useState(null);
@@ -275,21 +261,6 @@ export default function App() {
       supplements: merged.supplements,
     }, { onConflict: "date" }).then(() => loadHistory()).catch(() => showToast("Save failed", true));
   };
-  const getLastSession = (tmpl) => workoutHistory.find(w => w.workout_type === tmpl);
-  const addSet = (exerciseName) => {
-    if (!setInput.reps) return;
-    const ns = { weight: Number(setInput.weight)||0, reps: Number(setInput.reps) };
-    const ex = currentWorkout.find(e => e.name === exerciseName);
-    if (ex) setCurrentWorkout(p => p.map(e => e.name === exerciseName ? { ...e, sets: [...e.sets, ns] } : e));
-    else setCurrentWorkout(p => [...p, { name: exerciseName, sets: [ns] }]);
-    setSetInput({ weight: "", reps: "" }); setAddingExercise(null); showToast("Set logged");
-  };
-  const removeSet = (name, idx) => setCurrentWorkout(p => p.map(e => e.name === name ? { ...e, sets: e.sets.filter((_, i) => i !== idx) } : e).filter(e => e.sets.length > 0));
-  const saveWorkout = async () => {
-    if (!currentWorkout.length) return;
-    try { await supabase.from("workout_logs").insert({ date: todayStr(), day_name: today, workout_type: selectedTemplate, exercises: currentWorkout }); showToast("Workout saved!"); setCurrentWorkout([]); loadWorkoutHistory(); }
-    catch (_) { showToast("Save failed - run SQL setup", true); }
-  };
   const saveWeight = () => { const w = parseFloat(weightInput); if (!w) return; saveDay({ weight: w }); showToast("Weight logged: " + w + " lbs"); };
   const resetDay = async () => {
     const r = { calories: 0, protein: 0, water: 0, food_log: [], completed_workouts: [], weight: null, supplements: [] };
@@ -406,8 +377,6 @@ ${JSON.stringify(ctx, null, 2)}`;
   const startWeight = weightData[0]?.weight || 160;
   const currentWeight = weightData.at(-1)?.weight || dayData.weight || startWeight;
   const weightPct = Math.max(0, Math.min(((currentWeight - startWeight) / (goals.weightGoal - startWeight)) * 100, 100));
-  const allExercises = [...(WORKOUT_TEMPLATES[selectedTemplate]||[]), ...currentWorkout.filter(e => !(WORKOUT_TEMPLATES[selectedTemplate]||[]).includes(e.name)).map(e => e.name)];
-  const lastSession = getLastSession(selectedTemplate);
 
   if (loading) return (
     <div style={{ minHeight:"100vh", background:C.bg, display:"flex", alignItems:"center", justifyContent:"center", flexDirection:"column", gap:"20px", fontFamily:C.font }}>
@@ -440,7 +409,7 @@ ${JSON.stringify(ctx, null, 2)}`;
       </div>
 
       <div style={{ display:"flex", background:C.bg, borderBottom:`1px solid ${C.border}`, position:"sticky", top:"86px", zIndex:9 }}>
-        {[["today","Today"],["coach","Coach"],["workout","Workout"],["history","History"],["week","Week"],["schedule","Schedule"]].map(([k,l]) => tabBtn(k,l))}
+        {[["today","Today"],["coach","Coach"],["history","History"],["week","Week"],["schedule","Schedule"]].map(([k,l]) => tabBtn(k,l))}
       </div>
 
       <div style={{ padding:"16px", paddingBottom:"48px" }}>
@@ -710,126 +679,6 @@ ${JSON.stringify(ctx, null, 2)}`;
 
             {coachMessages.length > 0 && (
               <button onClick={() => setCoachMessages([])} style={{ width:"100%", background:"transparent", border:`1px solid ${C.border}`, borderRadius:C.rSm, padding:"10px", color:C.textSub, fontSize:"12px", cursor:"pointer", fontFamily:C.font, marginTop:"12px" }}>Clear chat</button>
-            )}
-          </div>
-        )}
-
-        {tab === "workout" && (
-          <div>
-            <div style={{ display:"flex", gap:"8px", marginBottom:"16px" }}>
-              <PillBtn onClick={() => setWorkoutSubTab("log")} active={workoutSubTab==="log"}>Log Workout</PillBtn>
-              <PillBtn onClick={() => setWorkoutSubTab("history")} active={workoutSubTab==="history"}>History</PillBtn>
-            </div>
-
-            {workoutSubTab === "log" && (
-              <div>
-                <Card>
-                  <Lbl>Workout Type</Lbl>
-                  <div style={{ display:"flex", gap:"6px", flexWrap:"wrap" }}>
-                    {Object.keys(WORKOUT_TEMPLATES).map(type => (
-                      <PillBtn key={type} onClick={() => { setSelectedTemplate(type); setCurrentWorkout([]); setAddingExercise(null); }} active={selectedTemplate===type}>{type}</PillBtn>
-                    ))}
-                  </div>
-                </Card>
-
-                {lastSession && (
-                  <Card accent={C.blue}>
-                    <Lbl color={C.blue}>{"Last Session - " + fmt(lastSession.date)}</Lbl>
-                    {(lastSession.exercises||[]).map((ex,i) => (
-                      <div key={i} style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"8px 0", borderBottom:`1px solid ${C.border}` }}>
-                        <div style={{ fontSize:"13px" }}>{ex.name}</div>
-                        <div style={{ display:"flex", gap:"4px" }}>
-                          {(ex.sets||[]).map((set,si) => (
-                            <span key={si} style={{ background:C.surfaceUp, borderRadius:"6px", padding:"3px 8px", fontSize:"11px" }}>
-                              {set.weight > 0 && <span style={{ color:C.orange }}>{set.weight + "lb "}</span>}
-                              <span style={{ color:C.blue }}>{"×" + set.reps}</span>
-                            </span>
-                          ))}
-                        </div>
-                      </div>
-                    ))}
-                  </Card>
-                )}
-
-                <Card>
-                  <Lbl>Log Sets</Lbl>
-                  {allExercises.map((exercise, i) => {
-                    const logged = currentWorkout.find(e => e.name === exercise);
-                    const isAdding = addingExercise === exercise;
-                    return (
-                      <div key={i} style={{ marginBottom:"10px", background:C.surfaceUp, borderRadius:C.rSm, padding:"14px", border:`1px solid ${logged ? C.accentBorder : C.border}` }}>
-                        <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center" }}>
-                          <div style={{ fontSize:"14px", fontWeight:"600", color: logged ? C.accent : C.text }}>{exercise}</div>
-                          <button onClick={() => setAddingExercise(isAdding ? null : exercise)} style={{ background:C.accentBg, border:`1px solid ${C.accentBorder}`, borderRadius:"16px", padding:"5px 12px", color:C.accent, cursor:"pointer", fontSize:"12px", fontWeight:"600", fontFamily:C.font }}>+ Set</button>
-                        </div>
-                        {logged && logged.sets.length > 0 && (
-                          <div style={{ marginTop:"10px", display:"flex", gap:"6px", flexWrap:"wrap" }}>
-                            {logged.sets.map((set,si) => (
-                              <div key={si} style={{ background:C.bg, border:`1px solid ${C.border}`, borderRadius:"8px", padding:"5px 10px", display:"flex", alignItems:"center", gap:"8px" }}>
-                                <span style={{ fontSize:"12px" }}>
-                                  {set.weight > 0 && <span style={{ color:C.orange, fontWeight:"600" }}>{set.weight + "lb "}</span>}
-                                  <span style={{ color:C.accent, fontWeight:"600" }}>{"×" + set.reps}</span>
-                                </span>
-                                <button onClick={() => removeSet(exercise, si)} style={{ background:"none", border:"none", color:C.textDim, cursor:"pointer", fontSize:"11px" }}>✕</button>
-                              </div>
-                            ))}
-                          </div>
-                        )}
-                        {isAdding && (
-                          <div style={{ marginTop:"12px", display:"flex", gap:"8px" }}>
-                            <Inp type="number" placeholder="lbs" value={setInput.weight} onChange={e => setSetInput({...setInput, weight:e.target.value})} style={{ color:C.orange, textAlign:"center", padding:"10px" }} />
-                            <Inp type="number" placeholder="reps" value={setInput.reps} onChange={e => setSetInput({...setInput, reps:e.target.value})} onKeyDown={e => e.key==="Enter" && addSet(exercise)} style={{ color:C.accent, textAlign:"center", padding:"10px" }} autoFocus />
-                            <button onClick={() => addSet(exercise)} style={{ background:C.accent, border:"none", borderRadius:C.rSm, padding:"10px 16px", color:"#000", fontWeight:"700", cursor:"pointer", fontFamily:C.font, fontSize:"14px", flexShrink:0 }}>Log</button>
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })}
-                  <div style={{ display:"flex", gap:"8px", marginTop:"4px" }}>
-                    <Inp placeholder="Add custom exercise..." value={customExercise} onChange={e => setCustomExercise(e.target.value)} onKeyDown={e => { if (e.key==="Enter" && customExercise.trim()) { setAddingExercise(customExercise); setCustomExercise(""); }}} />
-                    <button onClick={() => { if (customExercise.trim()) { setAddingExercise(customExercise); setCustomExercise(""); }}} style={{ background:C.surfaceUp, border:`1px solid ${C.border}`, borderRadius:C.rSm, padding:"12px 16px", color:C.textSub, cursor:"pointer", fontFamily:C.font, fontSize:"18px", flexShrink:0 }}>+</button>
-                  </div>
-                </Card>
-
-                {currentWorkout.length > 0 && (
-                  <button onClick={saveWorkout} style={{ width:"100%", background:C.accent, border:"none", borderRadius:C.r, padding:"16px", color:"#000", fontWeight:"700", fontSize:"15px", cursor:"pointer", fontFamily:C.font, marginBottom:"12px" }}>Save Workout</button>
-                )}
-              </div>
-            )}
-
-            {workoutSubTab === "history" && (
-              <div>
-                {!workoutHistory.length ? (
-                  <Card style={{ textAlign:"center", padding:"48px 20px" }}>
-                    <div style={{ fontSize:"36px", marginBottom:"12px" }}>💪</div>
-                    <div style={{ fontSize:"15px", fontWeight:"600", marginBottom:"6px" }}>No workouts yet</div>
-                    <div style={{ fontSize:"13px", color:C.textSub }}>Start logging to see history</div>
-                  </Card>
-                ) : workoutHistory.map((w,i) => (
-                  <Card key={i} accent={C.accent}>
-                    <div style={{ display:"flex", justifyContent:"space-between", marginBottom:"12px" }}>
-                      <div>
-                        <div style={{ fontSize:"15px", fontWeight:"700" }}>{w.workout_type}</div>
-                        <div style={{ fontSize:"12px", color:C.textSub, marginTop:"3px" }}>{w.day_name + " · " + fmt(w.date)}</div>
-                      </div>
-                      <div style={{ fontSize:"12px", color:C.textSub }}>{(w.exercises||[]).length + " exercises"}</div>
-                    </div>
-                    {(w.exercises||[]).map((ex,ei) => (
-                      <div key={ei} style={{ paddingTop:"10px", borderTop:`1px solid ${C.border}` }}>
-                        <div style={{ fontSize:"13px", fontWeight:"600", marginBottom:"6px" }}>{ex.name}</div>
-                        <div style={{ display:"flex", gap:"6px", flexWrap:"wrap" }}>
-                          {(ex.sets||[]).map((set,si) => (
-                            <span key={si} style={{ background:C.surfaceUp, border:`1px solid ${C.border}`, borderRadius:"8px", padding:"4px 10px", fontSize:"12px" }}>
-                              {set.weight > 0 && <span style={{ color:C.orange, fontWeight:"600" }}>{set.weight + "lb "}</span>}
-                              <span style={{ color:C.accent, fontWeight:"600" }}>{"×" + set.reps}</span>
-                            </span>
-                          ))}
-                        </div>
-                      </div>
-                    ))}
-                  </Card>
-                ))}
-              </div>
             )}
           </div>
         )}
