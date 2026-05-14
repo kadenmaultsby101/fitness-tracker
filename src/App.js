@@ -6,6 +6,7 @@ const DEFAULT_GOALS = { calories: 3200, protein: 150, water: 128, weightGoal: 18
 const SUPPLEMENTS = ["Creatine", "Protein Shake"];
 const GEMINI_MODEL = "gemini-2.5-flash";
 const GEMINI_API_KEY = process.env.REACT_APP_GEMINI_API_KEY;
+const OURA_TOKEN = process.env.REACT_APP_OURA_TOKEN;
 const COACH_PROMPTS = [
   "How am I doing this week?",
   "What should I eat to hit my protein goal today?",
@@ -139,6 +140,9 @@ export default function App() {
   const [coachMessages, setCoachMessages] = useState([]);
   const [coachInput, setCoachInput] = useState("");
   const [coachLoading, setCoachLoading] = useState(false);
+  const [oura, setOura] = useState(null);
+  const [ouraLoading, setOuraLoading] = useState(false);
+  const [ouraError, setOuraError] = useState(null);
   const today = getTodayName();
 
   const showToast = (msg, isError = false) => { setToast({ msg, isError }); setTimeout(() => setToast(null), 2500); };
@@ -178,7 +182,42 @@ export default function App() {
     } catch (_) {}
   }, []);
 
-  useEffect(() => { loadToday(); loadHistory(); loadWorkoutHistory(); loadGoals(); }, [loadToday, loadHistory, loadWorkoutHistory, loadGoals]);
+  const loadOura = useCallback(async () => {
+    if (!OURA_TOKEN) { setOuraError("Add REACT_APP_OURA_TOKEN to Vercel env vars"); return; }
+    setOuraLoading(true); setOuraError(null);
+    const end = todayStr();
+    const start = new Date(Date.now() - 2 * 86400000).toLocaleDateString("en-CA", { timeZone: "America/Los_Angeles" });
+    const headers = { Authorization: `Bearer ${OURA_TOKEN}` };
+    try {
+      const [sleepRes, readyRes, detailRes] = await Promise.all([
+        fetch(`https://api.ouraring.com/v2/usercollection/daily_sleep?start_date=${start}&end_date=${end}`, { headers }),
+        fetch(`https://api.ouraring.com/v2/usercollection/daily_readiness?start_date=${start}&end_date=${end}`, { headers }),
+        fetch(`https://api.ouraring.com/v2/usercollection/sleep?start_date=${start}&end_date=${end}`, { headers }),
+      ]);
+      if (!sleepRes.ok) throw new Error(`Sleep API ${sleepRes.status}: ${(await sleepRes.text()).slice(0,120)}`);
+      if (!readyRes.ok) throw new Error(`Readiness API ${readyRes.status}`);
+      const sleepData = await sleepRes.json();
+      const readyData = await readyRes.json();
+      const detailData = detailRes.ok ? await detailRes.json() : { data: [] };
+      const latestSleep = (sleepData.data || []).sort((a,b) => b.day.localeCompare(a.day))[0];
+      const latestReady = (readyData.data || []).sort((a,b) => b.day.localeCompare(a.day))[0];
+      const latestDetail = (detailData.data || []).filter(s => s.type === "long_sleep" || s.type === "sleep").sort((a,b) => b.day.localeCompare(a.day))[0];
+      setOura({
+        date: latestSleep?.day || latestReady?.day,
+        sleepScore: latestSleep?.score ?? null,
+        readinessScore: latestReady?.score ?? null,
+        totalSleepSec: latestDetail?.total_sleep_duration ?? null,
+        remSec: latestDetail?.rem_sleep_duration ?? null,
+        deepSec: latestDetail?.deep_sleep_duration ?? null,
+        efficiency: latestDetail?.efficiency ?? null,
+        restingHr: latestReady?.contributors?.resting_heart_rate ?? latestDetail?.lowest_heart_rate ?? null,
+        hrv: latestDetail?.average_hrv ?? null,
+      });
+    } catch (e) { setOuraError(e.message); }
+    setOuraLoading(false);
+  }, []);
+
+  useEffect(() => { loadToday(); loadHistory(); loadWorkoutHistory(); loadGoals(); loadOura(); }, [loadToday, loadHistory, loadWorkoutHistory, loadGoals, loadOura]);
 
   const saveDay = async (updates) => {
     const merged = {
@@ -445,6 +484,46 @@ ${JSON.stringify(ctx, null, 2)}`;
                   </div>
                 ))}
               </div>
+            </Card>
+
+            <Card accent={C.purple}>
+              <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:"14px" }}>
+                <Lbl color={C.purple} style={{ marginBottom:0 }}>Recovery · Oura</Lbl>
+                <button onClick={loadOura} disabled={ouraLoading} style={{ background:"none", border:`1px solid ${C.border}`, borderRadius:"20px", padding:"5px 12px", color:C.textSub, cursor: ouraLoading ? "wait":"pointer", fontSize:"11px", fontFamily:C.font }}>{ouraLoading ? "..." : "↻"}</button>
+              </div>
+              {ouraError ? (
+                <div style={{ fontSize:"12px", color:C.red, lineHeight:1.5 }}>{ouraError}</div>
+              ) : !oura ? (
+                <div style={{ fontSize:"12px", color:C.textSub }}>{ouraLoading ? "Loading…" : "No data yet"}</div>
+              ) : (
+                <div>
+                  <div style={{ display:"flex", gap:"8px", marginBottom:"12px" }}>
+                    {[{label:"Sleep",value:oura.sleepScore,color:C.blue},{label:"Readiness",value:oura.readinessScore,color:C.purple}].map(({label,value,color}) => (
+                      <div key={label} style={{ flex:1, background:C.surfaceUp, borderRadius:C.rSm, padding:"12px", border:`1px solid ${color}25`, textAlign:"center" }}>
+                        <div style={{ fontSize:"11px", color:C.textSub, marginBottom:"4px" }}>{label}</div>
+                        <div style={{ fontSize:"26px", fontWeight:"700", color }}>{value ?? "—"}</div>
+                        <div style={{ height:"3px", background:C.border, borderRadius:"2px", marginTop:"8px" }}>
+                          <div style={{ height:"100%", width:(value||0)+"%", background:color, borderRadius:"2px" }} />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                  <div style={{ display:"flex", justifyContent:"space-between", gap:"6px", flexWrap:"wrap" }}>
+                    {[
+                      {label:"Total", value: oura.totalSleepSec ? Math.floor(oura.totalSleepSec/3600) + "h " + Math.round((oura.totalSleepSec%3600)/60) + "m" : "—"},
+                      {label:"REM", value: oura.remSec ? Math.round(oura.remSec/60) + "m" : "—"},
+                      {label:"Deep", value: oura.deepSec ? Math.round(oura.deepSec/60) + "m" : "—"},
+                      {label:"Resting HR", value: oura.restingHr ? oura.restingHr + " bpm" : "—"},
+                      {label:"HRV", value: oura.hrv ? Math.round(oura.hrv) + " ms" : "—"},
+                    ].map(({label,value}) => (
+                      <div key={label} style={{ flex:"1 1 auto", textAlign:"center" }}>
+                        <div style={{ fontSize:"13px", fontWeight:"600", color:C.text }}>{value}</div>
+                        <div style={{ fontSize:"10px", color:C.textSub, marginTop:"2px" }}>{label}</div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </Card>
 
             <Card>
