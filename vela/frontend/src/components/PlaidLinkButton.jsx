@@ -1,14 +1,8 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { usePlaidLink } from 'react-plaid-link';
 import { supabase } from '../lib/supabase';
 import { API } from '../lib/apiUrl';
 import './PlaidLinkButton.css';
-
-async function authHeaders() {
-  const { data } = await supabase.auth.getSession();
-  const token = data.session?.access_token;
-  return token ? { Authorization: `Bearer ${token}` } : {};
-}
 
 async function fetchWithTimeout(url, options, ms) {
   const controller = new AbortController();
@@ -20,10 +14,7 @@ async function fetchWithTimeout(url, options, ms) {
   }
 }
 
-// Steps surfaced visually in the UI so we don't need DevTools to see which
-// part of the exchange flow is hanging.
 const STEPS = [
-  'Building auth headers…',
   'Preparing request…',
   'Sending to backend…',
   'Waiting for backend response…',
@@ -35,17 +26,26 @@ export default function PlaidLinkButton({ onConnected, variant = 'primary' }) {
   const [linkToken, setLinkToken] = useState(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
-  const [step, setStep] = useState(0); // 0 = idle, 1..6 = active step
+  const [step, setStep] = useState(0);
+  // Token captured at mount so we never need to call supabase.auth.getSession()
+  // from inside Plaid's onSuccess callback — that call has been observed to
+  // hang after the Plaid iframe closes on some browsers (likely localStorage
+  // contention with the iframe teardown).
+  const tokenRef = useRef(null);
 
-  // Fetch a fresh link token on mount.
   useEffect(() => {
     let cancelled = false;
     (async () => {
       try {
         setError('');
+        const { data } = await supabase.auth.getSession();
+        const token = data.session?.access_token;
+        if (!token) throw new Error('Not signed in.');
+        tokenRef.current = token;
+
         const res = await fetchWithTimeout(`${API}/api/plaid/create-link-token`, {
           method: 'POST',
-          headers: await authHeaders(),
+          headers: { Authorization: `Bearer ${token}` },
         }, 15000);
         const body = await res.json();
         if (!res.ok) throw new Error(body.error || `HTTP ${res.status}`);
@@ -68,28 +68,31 @@ export default function PlaidLinkButton({ onConnected, variant = 'primary' }) {
 
       setTimeout(async () => {
         try {
-          setStep(1);
-          const headers = await authHeaders();
-          headers['Content-Type'] = 'application/json';
+          const token = tokenRef.current;
+          if (!token) throw new Error('Session expired — refresh and try again.');
 
-          setStep(2);
+          setStep(1);
+          const headers = {
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'application/json',
+          };
           const body = JSON.stringify({
             public_token,
             institution: metadata.institution,
           });
 
-          setStep(3);
+          setStep(2);
           const url = `${API}/api/plaid/exchange-token`;
 
-          setStep(4);
+          setStep(3);
           const res = await fetchWithTimeout(url, { method: 'POST', headers, body }, 60000);
 
-          setStep(5);
+          setStep(4);
           const resBody = await res.json();
 
           if (!res.ok) throw new Error(resBody.error || `HTTP ${res.status}`);
 
-          setStep(6);
+          setStep(5);
           onConnected?.(resBody);
         } catch (e) {
           const msg = e?.name === 'AbortError'
@@ -115,7 +118,7 @@ export default function PlaidLinkButton({ onConnected, variant = 'primary' }) {
 
   const disabled = !ready || busy || !linkToken;
   const label = busy
-    ? `Connecting… (${step}/6)`
+    ? `Connecting… (${step}/5)`
     : !linkToken && !error
       ? 'Preparing…'
       : 'Connect a bank →';
