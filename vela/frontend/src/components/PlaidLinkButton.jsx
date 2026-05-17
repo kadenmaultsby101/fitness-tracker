@@ -10,6 +10,18 @@ async function authHeaders() {
   return token ? { Authorization: `Bearer ${token}` } : {};
 }
 
+// Race a fetch against a timeout via AbortController. If the backend doesn't
+// respond within ms, abort and throw a clean error so the button never traps.
+async function fetchWithTimeout(url, options, ms) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), ms);
+  try {
+    return await fetch(url, { ...options, signal: controller.signal });
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 export default function PlaidLinkButton({ onConnected, variant = 'primary' }) {
   const [linkToken, setLinkToken] = useState(null);
   const [busy, setBusy] = useState(false);
@@ -21,15 +33,21 @@ export default function PlaidLinkButton({ onConnected, variant = 'primary' }) {
     (async () => {
       try {
         setError('');
-        const res = await fetch(`${API}/api/plaid/create-link-token`, {
+        console.info('[vela] PlaidLinkButton: requesting link_token from', API);
+        const res = await fetchWithTimeout(`${API}/api/plaid/create-link-token`, {
           method: 'POST',
           headers: await authHeaders(),
-        });
+        }, 15000);
         const body = await res.json();
         if (!res.ok) throw new Error(body.error || `HTTP ${res.status}`);
+        console.info('[vela] PlaidLinkButton: got link_token');
         if (!cancelled) setLinkToken(body.link_token);
       } catch (e) {
-        if (!cancelled) setError(e.message);
+        console.error('[vela] PlaidLinkButton: link_token fetch failed', e);
+        const msg = e?.name === 'AbortError'
+          ? 'Backend didn\'t respond in 15s — wake it up at https://vela-backend-w8q8.onrender.com'
+          : e?.message || 'Failed to reach backend.';
+        if (!cancelled) setError(msg);
       }
     })();
     return () => {
@@ -41,8 +59,9 @@ export default function PlaidLinkButton({ onConnected, variant = 'primary' }) {
     async (public_token, metadata) => {
       setBusy(true);
       setError('');
+      console.info('[vela] PlaidLinkButton: Plaid Link succeeded, exchanging…');
       try {
-        const res = await fetch(`${API}/api/plaid/exchange-token`, {
+        const res = await fetchWithTimeout(`${API}/api/plaid/exchange-token`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -52,12 +71,17 @@ export default function PlaidLinkButton({ onConnected, variant = 'primary' }) {
             public_token,
             institution: metadata.institution,
           }),
-        });
+        }, 30000);
         const body = await res.json();
+        console.info('[vela] PlaidLinkButton: exchange response', { status: res.status, body });
         if (!res.ok) throw new Error(body.error || `HTTP ${res.status}`);
         onConnected?.(body);
       } catch (e) {
-        setError(e.message);
+        console.error('[vela] PlaidLinkButton: exchange failed', e);
+        const msg = e?.name === 'AbortError'
+          ? 'Backend didn\'t respond in 30s — try Sync now or refresh; accounts may still have saved.'
+          : e?.message || 'Could not connect the bank. Try again.';
+        setError(msg);
       } finally {
         setBusy(false);
       }
