@@ -435,7 +435,10 @@ app.post('/api/plaid/create-link-token', async (req, res) => {
     const { data } = await plaid.linkTokenCreate({
       user: { client_user_id: user.id },
       client_name: 'Vela',
-      products: [Products.Auth, Products.Transactions, Products.Investments],
+      // Production gates Auth and Investments separately — request them only
+      // after they're enabled on the Plaid dashboard. Transactions is what
+      // Vela actually uses for accounts + balances + spending history.
+      products: [Products.Transactions],
       country_codes: [CountryCode.Us],
       language: 'en',
     });
