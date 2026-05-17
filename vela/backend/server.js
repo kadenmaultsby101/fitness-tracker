@@ -72,14 +72,27 @@ export const supabase = createClient(
 const app = express();
 
 const allowedOrigins = CORS_ORIGINS.split(',').map((s) => s.trim()).filter(Boolean);
+
+// Vela's own production domains — always allowed regardless of CORS_ORIGINS
+// env-var state. Add new ones here when you point a domain at Vela.
+const VELA_HOSTS = new Set([
+  'velaos.app',
+  'www.velaos.app',
+]);
+
 app.use(
   cors({
     origin: (origin, cb) => {
       // Allow same-origin/no-origin (curl, server-to-server) and any allowed origin.
       if (!origin) return cb(null, true);
       if (allowedOrigins.includes(origin)) return cb(null, true);
-      // Allow any *.vercel.app preview URL so preview deployments can hit the API.
-      if (/\.vercel\.app$/.test(new URL(origin).hostname)) return cb(null, true);
+      try {
+        const host = new URL(origin).hostname;
+        // Any *.vercel.app preview URL hits the API without per-deploy config.
+        if (/\.vercel\.app$/.test(host)) return cb(null, true);
+        // Vela's pinned production hosts.
+        if (VELA_HOSTS.has(host)) return cb(null, true);
+      } catch { /* malformed origin — fall through to deny */ }
       return cb(new Error(`CORS: origin ${origin} not allowed`));
     },
     methods: ['GET', 'POST', 'DELETE', 'OPTIONS'],
