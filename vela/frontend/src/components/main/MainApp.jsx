@@ -1,8 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { supabase } from '../../lib/supabase';
+import { API } from '../../lib/apiUrl';
 import { useFinancialData } from '../../hooks/useFinancialData';
-
-const API = import.meta.env.VITE_API_URL || '';
 import HomePage from './HomePage';
 import BudgetPage from './BudgetPage';
 import GoalsPage from './GoalsPage';

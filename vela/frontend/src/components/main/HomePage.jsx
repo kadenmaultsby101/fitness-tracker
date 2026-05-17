@@ -1,7 +1,6 @@
 import { money, moneyAbs, emojiFor, relDate, displayAccountName } from './format';
 import AnimatedNumber from './AnimatedNumber';
-
-const API = import.meta.env.VITE_API_URL || '';
+import { API } from '../../lib/apiUrl';
 
 function setupSteps({ accounts, transactions, goals, budgets, plaidConnected }) {
   return [

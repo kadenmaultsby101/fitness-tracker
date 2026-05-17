@@ -1,8 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { supabase } from '../../lib/supabase';
+import { API } from '../../lib/apiUrl';
 import { money } from './format';
-
-const API = import.meta.env.VITE_API_URL || '';
 
 const SUGGESTIONS = [
   'Where should I focus this month?',
