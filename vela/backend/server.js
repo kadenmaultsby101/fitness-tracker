@@ -481,25 +481,37 @@ app.post('/api/plaid/exchange-token', async (req, res) => {
     const { data: acc } = await plaid.accountsGet({ access_token: accessToken });
     await upsertAccountsFromPlaid(user.id, itemRow.id, acc.accounts);
 
-    // 4. Pull last 30 days of transactions and save them
-    const start = isoDateOffset(-30);
-    const end = isoDateOffset(0);
-    let txnCount = 0;
-    try {
-      const txns = await fetchAllTransactions(accessToken, start, end);
-      txnCount = await upsertTransactionsFromPlaid(user.id, txns);
-    } catch (txErr) {
-      // Plaid sometimes returns PRODUCT_NOT_READY for fresh sandbox items —
-      // accounts are saved; transactions will fill in on first /api/sync.
-      console.warn('[plaid] transactionsGet (initial) failed', plaidErrorMessage(txErr));
-    }
-
+    // 4. Return immediately so the user sees their accounts populate fast.
+    //    On Production, the FIRST transactionsGet call can take 30-60s
+    //    while Plaid does the initial bank pull. Don't make the user wait.
+    //    Transactions are fetched in the background here (fire-and-forget),
+    //    and the frontend's auto-sync-on-mount + manual Sync button will
+    //    backfill anything missed.
     res.json({
       success: true,
       institution: institution?.name || 'Unknown',
       accounts: acc.accounts.length,
-      transactions: txnCount,
+      transactions: 'fetching_in_background',
     });
+
+    // Background fetch — runs after the response is sent. Errors are
+    // logged but never reach the client.
+    (async () => {
+      try {
+        const start = isoDateOffset(-30);
+        const end = isoDateOffset(0);
+        const txns = await fetchAllTransactions(accessToken, start, end);
+        const count = await upsertTransactionsFromPlaid(user.id, txns);
+        console.info(`[plaid] background fetch landed ${count} transactions for item ${itemRow.id}`);
+      } catch (txErr) {
+        console.warn(
+          `[plaid] background transactionsGet failed for item ${itemRow.id} —`,
+          'will retry on next /api/sync:',
+          plaidErrorMessage(txErr)
+        );
+      }
+    })();
+    return;
   } catch (err) {
     console.error('[plaid] exchange-token failed', plaidErrorMessage(err));
     res.status(500).json({ error: plaidErrorMessage(err) });
