@@ -56,35 +56,50 @@ export default function PlaidLinkButton({ onConnected, variant = 'primary' }) {
   }, []);
 
   const onSuccess = useCallback(
-    async (public_token, metadata) => {
+    (public_token, metadata) => {
       setBusy(true);
       setError('');
-      console.info('[vela] PlaidLinkButton: Plaid Link succeeded, exchanging…');
-      try {
-        const res = await fetchWithTimeout(`${API}/api/plaid/exchange-token`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            ...(await authHeaders()),
-          },
-          body: JSON.stringify({
+      console.info('[vela] PlaidLinkButton: Plaid Link succeeded, deferring exchange to next tick…');
+
+      // Defer 200ms so Plaid Link can fully close and release the event
+      // loop. Plaid Link is known to interfere with async operations
+      // running immediately inside onSuccess on some browsers — the fetch
+      // never goes out. A short timeout works around it. Also makes the
+      // failure observable: each step logs its progress.
+      setTimeout(async () => {
+        try {
+          console.info('[vela] PlaidLinkButton: step 1 — building headers');
+          const headers = await authHeaders();
+          headers['Content-Type'] = 'application/json';
+          console.info('[vela] PlaidLinkButton: step 2 — headers ready', { hasAuth: Boolean(headers.Authorization) });
+
+          const body = JSON.stringify({
             public_token,
             institution: metadata.institution,
-          }),
-        }, 30000);
-        const body = await res.json();
-        console.info('[vela] PlaidLinkButton: exchange response', { status: res.status, body });
-        if (!res.ok) throw new Error(body.error || `HTTP ${res.status}`);
-        onConnected?.(body);
-      } catch (e) {
-        console.error('[vela] PlaidLinkButton: exchange failed', e);
-        const msg = e?.name === 'AbortError'
-          ? 'Backend didn\'t respond in 30s — try Sync now or refresh; accounts may still have saved.'
-          : e?.message || 'Could not connect the bank. Try again.';
-        setError(msg);
-      } finally {
-        setBusy(false);
-      }
+          });
+          console.info('[vela] PlaidLinkButton: step 3 — body prepared', { length: body.length });
+
+          const url = `${API}/api/plaid/exchange-token`;
+          console.info('[vela] PlaidLinkButton: step 4 — firing fetch to', url);
+
+          const res = await fetchWithTimeout(url, { method: 'POST', headers, body }, 30000);
+          console.info('[vela] PlaidLinkButton: step 5 — got response', { status: res.status, ok: res.ok });
+
+          const resBody = await res.json();
+          console.info('[vela] PlaidLinkButton: step 6 — parsed body', resBody);
+
+          if (!res.ok) throw new Error(resBody.error || `HTTP ${res.status}`);
+          onConnected?.(resBody);
+        } catch (e) {
+          console.error('[vela] PlaidLinkButton: exchange failed', { name: e?.name, message: e?.message, error: e });
+          const msg = e?.name === 'AbortError'
+            ? 'Backend didn\'t respond in 30s. Your bank may still be connected — refresh.'
+            : e?.message || 'Could not connect the bank. Try again.';
+          setError(msg);
+        } finally {
+          setBusy(false);
+        }
+      }, 200);
     },
     [onConnected]
   );
