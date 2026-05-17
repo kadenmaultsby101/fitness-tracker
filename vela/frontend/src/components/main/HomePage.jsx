@@ -1,6 +1,6 @@
 import { money, moneyAbs, emojiFor, relDate, displayAccountName } from './format';
 import AnimatedNumber from './AnimatedNumber';
-import { API } from '../../lib/apiUrl';
+import { BACKEND_AVAILABLE } from '../../lib/apiUrl';
 
 function setupSteps({ accounts, transactions, goals, budgets, plaidConnected }) {
   return [
@@ -8,7 +8,7 @@ function setupSteps({ accounts, transactions, goals, budgets, plaidConnected }) 
     { key: 'txn',      done: transactions.length > 0,  label: 'Log a transaction' },
     { key: 'goal',     done: goals.length > 0,         label: 'Create a goal' },
     { key: 'budget',   done: budgets.length > 0,       label: 'Set a monthly budget' },
-    { key: 'plaid',    done: plaidConnected,           label: 'Connect a bank via Plaid', optional: !API },
+    { key: 'plaid',    done: plaidConnected,           label: 'Connect a bank via Plaid', optional: !BACKEND_AVAILABLE },
   ];
 }
 
