@@ -89,22 +89,29 @@ export default function MorePage({ data, session, onSignOut }) {
   const handleSync = async () => {
     setSyncing(true);
     setSyncMsg('');
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 90000);
     try {
       const { data: sess } = await supabase.auth.getSession();
       const token = sess.session?.access_token;
       const res = await fetch(`${API}/api/sync`, {
         method: 'POST',
         headers: { Authorization: `Bearer ${token}` },
+        signal: controller.signal,
       });
       const body = await res.json();
       if (!res.ok) throw new Error(body.error || `HTTP ${res.status}`);
       setSyncMsg(`Synced ${body.items} item${body.items === 1 ? '' : 's'} · ${body.new_transactions} new txn${body.new_transactions === 1 ? '' : 's'}`);
       data.refresh();
     } catch (e) {
-      setSyncMsg(`Sync failed: ${e.message}`);
+      const msg = e?.name === 'AbortError'
+        ? 'Sync timed out (90s). Plaid may be slow — try again.'
+        : `Sync failed: ${e.message}`;
+      setSyncMsg(msg);
     } finally {
+      clearTimeout(timer);
       setSyncing(false);
-      setTimeout(() => setSyncMsg(''), 5000);
+      setTimeout(() => setSyncMsg(''), 8000);
     }
   };
 
