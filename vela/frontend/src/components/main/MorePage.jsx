@@ -12,7 +12,10 @@ const SETTINGS_KEYS = [
 ];
 
 export default function MorePage({ data, session, onSignOut }) {
-  const { profile, accounts } = data;
+  const { profile, accounts, loading, error } = data;
+  const plaidConnectedCount = accounts.filter(
+    (a) => !String(a.plaid_account_id || '').startsWith('manual_')
+  ).length;
   const [busyKey, setBusyKey] = useState('');
   const [syncing, setSyncing] = useState(false);
   const [syncMsg, setSyncMsg] = useState('');
@@ -165,7 +168,61 @@ export default function MorePage({ data, session, onSignOut }) {
       </div>
 
       <div className="card">
-        <div className="ctitle">Connect a bank</div>
+        <div className="ctitle">
+          Connected Accounts ({plaidConnectedCount} bank{plaidConnectedCount === 1 ? '' : 's'})
+        </div>
+        {loading ? (
+          <div style={{ fontSize: 10, letterSpacing: 1.5, color: 'var(--t3)', padding: '4px 0' }}>
+            Loading accounts…
+          </div>
+        ) : error ? (
+          <>
+            <div className="merr" style={{ marginBottom: 10 }}>
+              Couldn't load accounts: {error}
+            </div>
+            <button
+              type="button"
+              className="bsec"
+              style={{ width: '100%' }}
+              onClick={() => data.refresh()}
+            >
+              Retry
+            </button>
+          </>
+        ) : accounts.length === 0 ? (
+          <div style={{ fontSize: 11, color: 'var(--t3)', lineHeight: 1.7, padding: '4px 0' }}>
+            No banks connected yet — use the button below.
+          </div>
+        ) : (
+          accounts.map((a) => {
+            const isDebt = a.type === 'credit' || a.type === 'loan';
+            const bal = Number(a.balance_current) || 0;
+            return (
+              <div key={a.id} className="sr">
+                <div>
+                  <div className="sr-l">{a.name}{a.mask ? ` ··${a.mask}` : ''}</div>
+                  <div className="sr-s">{a.subtype || a.type}</div>
+                </div>
+                <div
+                  style={{
+                    fontFamily: 'var(--serif)',
+                    fontSize: 16,
+                    fontWeight: 300,
+                    color: isDebt ? 'var(--red)' : undefined,
+                  }}
+                >
+                  {isDebt ? '−' : ''}{money(bal)}
+                </div>
+              </div>
+            );
+          })
+        )}
+      </div>
+
+      <div className="card">
+        <div className="ctitle">
+          {plaidConnectedCount > 0 ? 'Connect another bank' : 'Connect a bank'}
+        </div>
         <div style={{ fontSize: 11, color: 'var(--t2)', lineHeight: 1.7, marginBottom: 12 }}>
           {BACKEND_AVAILABLE
             ? <>Via Plaid — <strong style={{ color: 'var(--t1)' }}>read-only</strong>, never stores credentials. Picks up balances and transactions automatically.</>
@@ -231,38 +288,6 @@ export default function MorePage({ data, session, onSignOut }) {
             </button>
           </div>
         ))}
-      </div>
-
-      <div className="card">
-        <div className="ctitle">Connected Accounts ({accounts.length})</div>
-        {accounts.length === 0 ? (
-          <div style={{ fontSize: 11, color: 'var(--t3)', lineHeight: 1.7 }}>
-            None yet.
-          </div>
-        ) : (
-          accounts.map((a) => {
-            const isDebt = a.type === 'credit' || a.type === 'loan';
-            const bal = Number(a.balance_current) || 0;
-            return (
-              <div key={a.id} className="sr">
-                <div>
-                  <div className="sr-l">{a.name}{a.mask ? ` ··${a.mask}` : ''}</div>
-                  <div className="sr-s">{a.subtype || a.type}</div>
-                </div>
-                <div
-                  style={{
-                    fontFamily: 'var(--serif)',
-                    fontSize: 16,
-                    fontWeight: 300,
-                    color: isDebt ? 'var(--red)' : undefined,
-                  }}
-                >
-                  {isDebt ? '−' : ''}{money(bal)}
-                </div>
-              </div>
-            );
-          })
-        )}
       </div>
 
       <div className="card" style={{ borderColor: 'rgba(235,159,159,0.25)' }}>
