@@ -46,13 +46,13 @@ export default function PlaidLinkButton({ onConnected, variant = 'primary' }) {
         const res = await fetchWithTimeout(`${API}/api/plaid/create-link-token`, {
           method: 'POST',
           headers: { Authorization: `Bearer ${token}` },
-        }, 15000);
+        }, 30000);
         const body = await res.json();
         if (!res.ok) throw new Error(body.error || `HTTP ${res.status}`);
         if (!cancelled) setLinkToken(body.link_token);
       } catch (e) {
         const msg = e?.name === 'AbortError'
-          ? 'Backend not responding (15s). Refresh.'
+          ? 'Backend not responding (30s). Refresh.'
           : e?.message || 'Failed to reach backend.';
         if (!cancelled) setError(msg);
       }
@@ -153,7 +153,7 @@ export default function PlaidLinkButton({ onConnected, variant = 'primary' }) {
           textAlign: 'center',
           lineHeight: 1.5,
         }}>
-          Waking the backend up — first use of the day takes 30–50 sec.
+          Asking Plaid for a link token…
         </div>
       )}
     </div>

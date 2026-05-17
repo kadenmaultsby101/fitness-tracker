@@ -2,17 +2,16 @@ import { money, moneyAbs, emojiFor, relDate, displayAccountName } from './format
 import AnimatedNumber from './AnimatedNumber';
 import { BACKEND_AVAILABLE } from '../../lib/apiUrl';
 
-function setupSteps({ accounts, transactions, goals, budgets, plaidConnected }) {
+function setupSteps({ transactions, goals, budgets, plaidConnected }) {
   return [
-    { key: 'account',  done: accounts.length > 0,      label: 'Add your first account' },
-    { key: 'txn',      done: transactions.length > 0,  label: 'Log a transaction' },
+    { key: 'plaid',    done: plaidConnected,           label: 'Connect a bank via Plaid' },
+    { key: 'txn',      done: transactions.length > 0,  label: 'Log a transaction (optional cash)', optional: true },
     { key: 'goal',     done: goals.length > 0,         label: 'Create a goal' },
     { key: 'budget',   done: budgets.length > 0,       label: 'Set a monthly budget' },
-    { key: 'plaid',    done: plaidConnected,           label: 'Connect a bank via Plaid', optional: !BACKEND_AVAILABLE },
   ];
 }
 
-export default function HomePage({ data, session, onAddTxn, onAddAccount, onEditAccount, onEditTxn, onGoTo }) {
+export default function HomePage({ data, session, onAddTxn, onEditAccount, onEditTxn, onGoTo }) {
   const { profile, accounts, transactions, goals, budgets, derived, loading } = data;
   const firstName =
     (profile?.name || session?.user?.user_metadata?.name || '').split(' ')[0] ||
@@ -25,7 +24,7 @@ export default function HomePage({ data, session, onAddTxn, onAddAccount, onEdit
   const plaidConnected = accounts.some((a) => !String(a.plaid_account_id || '').startsWith('manual_'));
 
   // Setup checklist — hides itself once every required step is done.
-  const steps = setupSteps({ accounts, transactions, goals, budgets, plaidConnected });
+  const steps = setupSteps({ transactions, goals, budgets, plaidConnected });
   const required = steps.filter((s) => !s.optional);
   const completed = required.filter((s) => s.done).length;
   const showChecklist = completed < required.length;
@@ -97,8 +96,7 @@ export default function HomePage({ data, session, onAddTxn, onAddAccount, onEdit
               key={s.key}
               type="button"
               onClick={() => {
-                if (s.key === 'account') onAddAccount();
-                else if (s.key === 'txn') onAddTxn();
+                if (s.key === 'txn') onAddTxn();
                 else if (s.key === 'goal') onGoTo('goals');
                 else if (s.key === 'budget') onGoTo('budget');
                 else if (s.key === 'plaid') onGoTo('more');
@@ -164,14 +162,13 @@ export default function HomePage({ data, session, onAddTxn, onAddAccount, onEdit
         </button>
       </div>
 
-      <div className="slbl" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+      <div className="slbl">
         <span>Accounts</span>
-        <button type="button" className="ctitle-act" onClick={onAddAccount}>+ Add</button>
       </div>
       {!hasAccounts && !loading ? (
         <div className="empty">
           <div className="empty-title">No accounts yet</div>
-          Add one manually now, or connect a bank later from <strong style={{ color: 'var(--t1)' }}>More</strong>.
+          Connect a bank from <strong style={{ color: 'var(--t1)' }}>More</strong> — Plaid syncs balances and transactions automatically.
         </div>
       ) : loading ? (
         <SkeletonAccounts />
@@ -200,7 +197,6 @@ export default function HomePage({ data, session, onAddTxn, onAddAccount, onEdit
               </div>
             );
           })}
-          <div className="am add" onClick={onAddAccount} role="button">+</div>
         </div>
       )}
 

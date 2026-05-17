@@ -13,7 +13,31 @@ function isManualTxn(t) {
   return !t?.plaid_transaction_id || String(t.plaid_transaction_id).startsWith('manual_');
 }
 
-export default function AddTransactionModal({ transaction, accounts, onClose, onSaved, onSwitchToAddAccount }) {
+async function ensureCashAccount(userId) {
+  const { data: existing } = await withTimeout(
+    supabase.from('accounts').select('id').eq('user_id', userId).eq('subtype', 'cash').limit(1),
+    6000
+  );
+  if (existing && existing.length > 0) return existing[0].id;
+
+  const ts = Date.now();
+  const random = Math.random().toString(36).slice(2, 10);
+  const { data: inserted, error } = await withTimeout(
+    supabase.from('accounts').insert({
+      user_id: userId,
+      plaid_account_id: `manual_${userId.slice(0, 8)}_cash_${ts}_${random}`,
+      name: 'Cash',
+      type: 'depository',
+      subtype: 'cash',
+      balance_current: 0,
+    }).select(),
+    6000
+  );
+  if (error) throw error;
+  return inserted[0].id;
+}
+
+export default function AddTransactionModal({ transaction, accounts, onClose, onSaved }) {
   const editing = Boolean(transaction);
   const fromPlaid = editing && !isManualTxn(transaction);
 
@@ -37,39 +61,11 @@ export default function AddTransactionModal({ transaction, accounts, onClose, on
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
 
-  // No accounts at all — prompt user to add one (only when adding, not editing).
-  if (!editing && accounts.length === 0) {
-    return (
-      <div className="moverlay" onClick={onClose}>
-        <div className="modal" onClick={(e) => e.stopPropagation()}>
-          <button type="button" className="mcl" onClick={onClose} aria-label="Close">×</button>
-          <div className="mtitle">No accounts yet</div>
-          <div className="msub">Add one first — transactions need to live somewhere</div>
-          <div className="mnote">
-            Drop in your <strong>Chase Checking</strong>, <strong>Robinhood</strong>, or whatever
-            you've got. Update the balance any time. Or connect a bank later from <strong>More</strong>.
-          </div>
-          <div className="mbtns">
-            <button type="button" className="bsec" onClick={onClose}>Not now</button>
-            <button
-              type="button"
-              className="bpri"
-              onClick={() => { onClose(); onSwitchToAddAccount?.(); }}
-            >
-              Add an account →
-            </button>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
   const save = async () => {
     setError('');
     if (!name.trim()) return setError('Name is required.');
     const amt = Number(String(amount).replace(/[^0-9.]/g, ''));
     if (!Number.isFinite(amt) || amt <= 0) return setError('Enter a positive amount.');
-    if (!accountId) return setError('Pick an account, or add one from Home first.');
 
     setBusy(true);
     try {
@@ -77,12 +73,17 @@ export default function AddTransactionModal({ transaction, accounts, onClose, on
       const userId = sess.session?.user?.id;
       if (!userId) throw new Error('Not signed in.');
 
+      // No accounts (or none selected) → auto-create a Cash wallet so the
+      // user can log cash spending without ever touching an account form.
+      let targetAccountId = accountId;
+      if (!targetAccountId) targetAccountId = await ensureCashAccount(userId);
+
       // Plaid convention: outflows positive, inflows negative.
       const signedAmount = direction === 'income' ? -amt : amt;
 
       if (editing) {
         const update = {
-          account_id: accountId,
+          account_id: targetAccountId,
           name: name.trim(),
           merchant_name: name.trim(),
           amount: signedAmount,
@@ -105,7 +106,7 @@ export default function AddTransactionModal({ transaction, accounts, onClose, on
         const random = Math.random().toString(36).slice(2, 10);
         const payload = {
           user_id: userId,
-          account_id: accountId,
+          account_id: targetAccountId,
           plaid_transaction_id: `manual_${userId.slice(0, 8)}_${ts}_${random}`,
           name: name.trim(),
           merchant_name: name.trim(),
@@ -169,7 +170,9 @@ export default function AddTransactionModal({ transaction, accounts, onClose, on
         <div className="msub">
           {editing
             ? (fromPlaid ? 'Read-only — synced from Plaid' : 'Update details or delete')
-            : 'Manual entry — no bank needed'}
+            : accounts.length === 0
+              ? 'No account yet — saves to a Cash wallet automatically'
+              : 'Cash or anything Plaid missed'}
         </div>
 
         {error && <div className="merr">{error}</div>}
@@ -217,20 +220,23 @@ export default function AddTransactionModal({ transaction, accounts, onClose, on
           disabled={fromPlaid}
         />
 
-        <div className="fl">Account</div>
-        <select
-          className="fselect"
-          value={accountId}
-          onChange={(e) => setAccountId(e.target.value)}
-          disabled={fromPlaid}
-        >
-          {accounts.length === 0 && <option value="">— No accounts yet —</option>}
-          {accounts.map((a) => (
-            <option key={a.id} value={a.id}>
-              {displayAccountName(a)}{a.mask ? ` ··${a.mask}` : ''}
-            </option>
-          ))}
-        </select>
+        {accounts.length > 0 && (
+          <>
+            <div className="fl">Account</div>
+            <select
+              className="fselect"
+              value={accountId}
+              onChange={(e) => setAccountId(e.target.value)}
+              disabled={fromPlaid}
+            >
+              {accounts.map((a) => (
+                <option key={a.id} value={a.id}>
+                  {displayAccountName(a)}{a.mask ? ` ··${a.mask}` : ''}
+                </option>
+              ))}
+            </select>
+          </>
+        )}
 
         {direction === 'expense' && (
           <>
