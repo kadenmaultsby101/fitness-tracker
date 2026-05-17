@@ -1,9 +1,8 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../../lib/supabase';
+import { API } from '../../lib/apiUrl';
 import { money } from './format';
 import PlaidLinkButton from '../PlaidLinkButton';
-
-const API = import.meta.env.VITE_API_URL || '';
 
 const SETTINGS_KEYS = [
   { col: 'notify_transactions',   lbl: 'Transaction Alerts',   sub: 'Notify on every transaction' },

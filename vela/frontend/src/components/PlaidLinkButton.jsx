@@ -1,9 +1,8 @@
 import { useCallback, useEffect, useState } from 'react';
 import { usePlaidLink } from 'react-plaid-link';
 import { supabase } from '../lib/supabase';
+import { API } from '../lib/apiUrl';
 import './PlaidLinkButton.css';
-
-const API = import.meta.env.VITE_API_URL || 'http://localhost:4000';
 
 async function authHeaders() {
   const { data } = await supabase.auth.getSession();
