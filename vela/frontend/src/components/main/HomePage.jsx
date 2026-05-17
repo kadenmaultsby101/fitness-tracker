@@ -12,7 +12,7 @@ function setupSteps({ transactions, goals, budgets, plaidConnected }) {
 }
 
 export default function HomePage({ data, session, onAddTxn, onEditAccount, onEditTxn, onGoTo }) {
-  const { profile, accounts, transactions, goals, budgets, derived, loading } = data;
+  const { profile, accounts, transactions, goals, budgets, derived, loading, error } = data;
   const firstName =
     (profile?.name || session?.user?.user_metadata?.name || '').split(' ')[0] ||
     'there';
@@ -165,7 +165,20 @@ export default function HomePage({ data, session, onAddTxn, onEditAccount, onEdi
       <div className="slbl">
         <span>Accounts</span>
       </div>
-      {!hasAccounts && !loading ? (
+      {!hasAccounts && !loading && error ? (
+        <div className="empty" style={{ borderColor: 'rgba(235,159,159,0.30)' }}>
+          <div className="empty-title" style={{ color: 'var(--red)' }}>Couldn't load accounts</div>
+          {error}
+          <button
+            type="button"
+            className="bsec"
+            style={{ width: '100%', marginTop: 10 }}
+            onClick={() => data.refresh()}
+          >
+            Retry
+          </button>
+        </div>
+      ) : !hasAccounts && !loading ? (
         <div className="empty">
           <div className="empty-title">No accounts yet</div>
           Connect a bank from <strong style={{ color: 'var(--t1)' }}>More</strong> — Plaid syncs balances and transactions automatically.

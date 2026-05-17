@@ -40,6 +40,8 @@ export default function MainApp({ session }) {
     autoSyncedRef.current = true;
 
     (async () => {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), 90000);
       try {
         const { data: sess } = await supabase.auth.getSession();
         const token = sess.session?.access_token;
@@ -47,6 +49,7 @@ export default function MainApp({ session }) {
         const res = await fetch(`${API}/api/sync`, {
           method: 'POST',
           headers: { Authorization: `Bearer ${token}` },
+          signal: controller.signal,
         });
         if (!res.ok) {
           console.warn('[vela] auto-sync skipped:', res.status);
@@ -60,6 +63,8 @@ export default function MainApp({ session }) {
       } catch (err) {
         // Background sync failure is non-fatal — user can still tap Sync now manually
         console.warn('[vela] auto-sync failed', err);
+      } finally {
+        clearTimeout(timer);
       }
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
