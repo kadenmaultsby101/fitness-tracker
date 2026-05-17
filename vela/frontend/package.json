@@ -10,7 +10,9 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.96.0",
     "@supabase/supabase-js": "^2.105.4",
+    "plaid": "^42.2.0",
     "react": "^19.2.5",
     "react-dom": "^19.2.5",
     "react-plaid-link": "^4.1.1"
