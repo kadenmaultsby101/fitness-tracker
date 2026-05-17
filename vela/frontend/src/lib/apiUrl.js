@@ -1,27 +1,18 @@
-// Single source of truth for the backend URL.
+// API base URL.
 //
-// Reads VITE_API_URL from the env at build time (set on Vercel). Falls back
-// to the production Render URL so that if a deployment is missing the env
-// var (e.g. a new Vercel project pointed at a custom domain that wasn't
-// configured yet), the app STILL works instead of silently calling an empty
-// host.
+// Vela's backend now lives as Vercel Serverless Functions inside the SAME
+// frontend project at /api/*. Same origin as the app — no CORS, no
+// cross-domain anything. So the default base is empty (relative).
 //
-// Update PROD_API_URL only if the Render service URL ever changes.
-const PROD_API_URL = 'https://vela-backend-w8q8.onrender.com';
+// VITE_API_URL env var still wins if set, in case someone wants to point at
+// an external backend during local dev or a custom deploy.
 
-export const API = (
-  import.meta.env.VITE_API_URL ||
-  (typeof window !== 'undefined' && window.location.hostname === 'localhost'
-    ? 'http://localhost:4000'
-    : PROD_API_URL)
-);
+export const API = import.meta.env.VITE_API_URL || '';
 
-// One-time log so we can see in the browser console which URL the app
-// chose, and whether it came from env or fallback.
 if (typeof window !== 'undefined') {
   // eslint-disable-next-line no-console
   console.info('[vela] API base', {
-    using: API,
+    using: API || '(same-origin /api)',
     from_env: Boolean(import.meta.env.VITE_API_URL),
   });
 }

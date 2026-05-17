@@ -1,7 +1,16 @@
 # Vela — Handoff State
 
 > Paste this into a new Claude Code chat to pick up where the previous session left off.
-> Last updated: end of build day 1.
+> Last updated: backend migrated to Vercel Serverless Functions (see ARCHITECTURE SHIFT below).
+
+## ARCHITECTURE SHIFT (most recent change)
+
+**Old:** Frontend on Vercel (velaos.app) → Backend on Render (vela-backend-w8q8.onrender.com)
+**New:** Frontend on Vercel (velaos.app) → Backend ALSO on Vercel as Serverless Functions in `vela/frontend/api/*.js`
+
+Why: Cross-origin Plaid flow was silently failing — exchange-token fetch never reached Render after Plaid Link closed. Moving the backend onto the same domain (velaos.app/api/...) eliminates CORS entirely and makes that whole class of bug impossible.
+
+Render is still online but unused. Once Vercel Functions are verified working, **cancel Render Starter ($7/mo saved)**.
 
 ## What Vela is
 
