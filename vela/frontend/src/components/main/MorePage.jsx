@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../../lib/supabase';
-import { API } from '../../lib/apiUrl';
+import { API, BACKEND_AVAILABLE } from '../../lib/apiUrl';
 import { money } from './format';
 import PlaidLinkButton from '../PlaidLinkButton';
 
@@ -41,9 +41,6 @@ export default function MorePage({ data, session, onSignOut }) {
   const confirmDelete = async () => {
     if (deleteConfirmText.trim().toUpperCase() !== 'DELETE') {
       return setDeleteError('Type DELETE exactly to confirm.');
-    }
-    if (!API) {
-      return setDeleteError('Backend not deployed yet. Try again later.');
     }
     setDeleteState('deleting');
     setDeleteError('');
@@ -90,7 +87,6 @@ export default function MorePage({ data, session, onSignOut }) {
   }, [profile]);
 
   const handleSync = async () => {
-    if (!API) return setSyncMsg('Backend not deployed yet.');
     setSyncing(true);
     setSyncMsg('');
     try {
@@ -164,11 +160,11 @@ export default function MorePage({ data, session, onSignOut }) {
       <div className="card">
         <div className="ctitle">Connect a bank</div>
         <div style={{ fontSize: 11, color: 'var(--t2)', lineHeight: 1.7, marginBottom: 12 }}>
-          {API
+          {BACKEND_AVAILABLE
             ? <>Via Plaid — <strong style={{ color: 'var(--t1)' }}>read-only</strong>, never stores credentials. Picks up balances and transactions automatically.</>
             : <>Plaid sync activates once the backend is deployed. Log accounts and transactions manually in the meantime — tap <strong style={{ color: 'var(--t1)' }}>+</strong> on Home.</>}
         </div>
-        {API ? (
+        {BACKEND_AVAILABLE ? (
           <>
             <PlaidLinkButton onConnected={() => data.refresh()} />
             {accounts.length > 0 && (

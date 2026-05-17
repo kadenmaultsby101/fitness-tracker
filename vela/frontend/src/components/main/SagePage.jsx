@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { supabase } from '../../lib/supabase';
-import { API } from '../../lib/apiUrl';
+import { API, BACKEND_AVAILABLE } from '../../lib/apiUrl';
 import { money } from './format';
 
 const SUGGESTIONS = [
@@ -71,7 +71,7 @@ export default function SagePage({ data, session }) {
     const text = (textOverride ?? input).trim();
     if (!text || sending) return;
 
-    if (!API) {
+    if (!BACKEND_AVAILABLE) {
       setMessages((m) => [
         ...m,
         { id: `local-u-${Date.now()}`, role: 'user', content: text },
@@ -152,7 +152,7 @@ export default function SagePage({ data, session }) {
           <div className="coach-nm">Sage</div>
           <div className="coach-st">
             <span className="ai-dot" />
-            {API ? 'Live · Powered by Claude' : 'Backend offline'}
+            {BACKEND_AVAILABLE ? 'Live · Powered by Claude' : 'Backend offline'}
           </div>
         </div>
       </div>
@@ -227,15 +227,15 @@ export default function SagePage({ data, session }) {
           value={input}
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={onKeyDown}
-          placeholder={API ? 'Ask Sage anything…' : 'Backend not deployed yet'}
-          disabled={sending || !API}
+          placeholder={BACKEND_AVAILABLE ? 'Ask Sage anything…' : 'Backend not deployed yet'}
+          disabled={sending || !BACKEND_AVAILABLE}
           rows={1}
         />
         <button
           type="button"
           className="csend"
           onClick={() => send()}
-          disabled={sending || !input.trim() || !API}
+          disabled={sending || !input.trim() || !BACKEND_AVAILABLE}
           aria-label="Send"
         >
           →

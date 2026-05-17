@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { supabase } from '../../lib/supabase';
-import { API } from '../../lib/apiUrl';
+import { API, BACKEND_AVAILABLE } from '../../lib/apiUrl';
 import { useFinancialData } from '../../hooks/useFinancialData';
 import HomePage from './HomePage';
 import BudgetPage from './BudgetPage';
@@ -36,7 +36,7 @@ export default function MainApp({ session }) {
   const autoSyncedRef = useRef(false);
   useEffect(() => {
     if (autoSyncedRef.current) return;
-    if (!API) return;
+    if (!BACKEND_AVAILABLE) return;
     autoSyncedRef.current = true;
 
     (async () => {
