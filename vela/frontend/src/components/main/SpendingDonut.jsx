@@ -15,6 +15,8 @@ export default function SpendingDonut({ byCategory, monthSpent, size = 160, thic
   const center = size / 2;
   const circumference = 2 * Math.PI * radius;
 
+  const monthName = new Date().toLocaleDateString('en-US', { month: 'long' }).toUpperCase();
+
   if (entries.length === 0 || total <= 0) {
     return (
       <div style={{ fontSize: 11, color: 'var(--t3)', lineHeight: 1.7, padding: '12px 0', textAlign: 'center' }}>
@@ -77,6 +79,14 @@ export default function SpendingDonut({ byCategory, monthSpent, size = 160, thic
           pointerEvents: 'none',
         }}>
           <div style={{
+            fontSize: 8,
+            letterSpacing: 2.5,
+            color: 'var(--t3)',
+            marginBottom: 4,
+          }}>
+            {monthName}
+          </div>
+          <div style={{
             fontFamily: 'var(--serif)',
             fontSize: size * 0.16,
             fontWeight: 300,
@@ -93,13 +103,13 @@ export default function SpendingDonut({ byCategory, monthSpent, size = 160, thic
             color: 'var(--t3)',
             marginTop: 6,
           }}>
-            Spent this month
+            Spent
           </div>
         </div>
       </div>
 
       <div style={{ flex: 1, minWidth: 160 }}>
-        {segments.slice(0, 6).map((s) => (
+        {segments.slice(0, 8).map((s) => (
           <div
             key={s.cat}
             style={{
@@ -107,7 +117,7 @@ export default function SpendingDonut({ byCategory, monthSpent, size = 160, thic
               alignItems: 'center',
               gap: 8,
               fontSize: 10.5,
-              padding: '4px 0',
+              padding: '5px 0',
               borderBottom: '1px solid var(--b1)',
             }}
           >
@@ -127,7 +137,22 @@ export default function SpendingDonut({ byCategory, monthSpent, size = 160, thic
             }}>
               {s.cat}
             </span>
-            <span style={{ color: 'var(--t3)', fontVariantNumeric: 'tabular-nums', minWidth: 32, textAlign: 'right' }}>
+            <span style={{
+              color: 'var(--t2)',
+              fontVariantNumeric: 'tabular-nums',
+              fontSize: 10,
+              minWidth: 52,
+              textAlign: 'right',
+            }}>
+              {money(s.amt).replace(/\.00$/, '')}
+            </span>
+            <span style={{
+              color: 'var(--t3)',
+              fontVariantNumeric: 'tabular-nums',
+              fontSize: 9.5,
+              minWidth: 32,
+              textAlign: 'right',
+            }}>
               {s.pct.toFixed(0)}%
             </span>
           </div>

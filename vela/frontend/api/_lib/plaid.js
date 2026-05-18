@@ -54,17 +54,66 @@ const BILLS_MERCHANTS = /(verizon|t.?mobile|at&t|sprint|xfinity|comcast|spectrum
 const INVESTMENT_MERCHANTS = /(robinhood|fidelity|vanguard|schwab|coinbase|kraken|binance|wealthfront|betterment|m1 finance|public\.com|^etrade|ameritrade|sofi invest|webull|^acorns\b)/i;
 const ENTERTAINMENT_MERCHANTS = /(amc theatre|regal cinema|cinemark|movie tavern|alamo drafthouse|stubhub|ticketmaster|^ax\b|eventbrite|^vivid seats|^seatgeek|fandango|^golf |bowling|paintball|escape room|arcade|^topgolf|six flags|disneyland|disney world|universal studios|^zoo |aquarium|museum|concert|festival|nightclub|venue|gymnastics|fitness|^gym\b|equinox|planet fitness|24 hour fitness|crunch fitness|orangetheory|soulcycle|^pilates|yoga studio|peloton)/i;
 
-export function mapToVelaCategory(plaidPrimary, _plaidSecondary, name, merchantName, accountType) {
+// Plaid's newer `personal_finance_category` field — exhaustive list of
+// primaries from Plaid's taxonomy. Maps cleanly to Vela's buckets. We
+// PREFER this over the legacy `category` array when present (Plaid is
+// migrating to PFC and it's far more accurate).
+const PFC_TO_VELA = {
+  INCOME:                   'Income',
+  TRANSFER_IN:              'Investment', // overridden to Bills on credit accounts
+  TRANSFER_OUT:             'Investment',
+  LOAN_PAYMENTS:            'Bills',
+  BANK_FEES:                'Bills',
+  ENTERTAINMENT:            'Entertainment',
+  FOOD_AND_DRINK:           'Food & Dining',
+  GENERAL_MERCHANDISE:      'Shopping',
+  HOME_IMPROVEMENT:         'Housing',
+  MEDICAL:                  'Bills',
+  PERSONAL_CARE:            'Shopping',
+  GENERAL_SERVICES:         'Bills',
+  GOVERNMENT_AND_NON_PROFIT:'Bills',
+  TRANSPORTATION:           'Transport',
+  TRAVEL:                   'Transport',
+  RENT_AND_UTILITIES:       'Housing',
+};
+
+export function mapToVelaCategory(plaidPrimary, _plaidSecondary, name, merchantName, accountType, pfcPrimary, pfcDetailed) {
   const merchant = (merchantName || name || '').toLowerCase();
   const txnName = (name || '').toLowerCase();
 
-  // PAYMENT detection first — a Robinhood/Chase/Amex "payment" is a credit
-  // card payoff, NOT an investment or a meal.
+  // PAYMENT detection wins over everything — "ROBINHOOD PAYMENT" must
+  // never become Investment or Food.
   if (PAYMENT_PATTERN.test(merchant) || PAYMENT_PATTERN.test(txnName)) {
     return 'Bills';
   }
 
-  // Merchant-name overrides win for everything else — Plaid's buckets are coarse.
+  // Specific detailed PFC overrides for the rare cases where the primary
+  // would mislead us (e.g. RENT_AND_UTILITIES_TELEPHONE belongs to Bills,
+  // not Housing).
+  if (pfcDetailed) {
+    const d = pfcDetailed.toUpperCase();
+    if (d.includes('TELEPHONE') || d.includes('INTERNET') || d.includes('WATER') ||
+        d.includes('GAS_AND_ELECTRICITY') || d.includes('SEWAGE')) {
+      return 'Bills';
+    }
+    if (d.includes('SUBSCRIPTION') || d.includes('DIGITAL')) {
+      return 'Subscriptions';
+    }
+    if (d.includes('GROCERIES') || d.includes('FAST_FOOD') || d.includes('COFFEE') ||
+        d.includes('RESTAURANT') || d.includes('BEER_WINE_AND_LIQUOR') ||
+        d.includes('VENDING_MACHINES')) {
+      return 'Food & Dining';
+    }
+    if (d.includes('GAS_STATIONS') || d.includes('PARKING') || d.includes('TAXIS') ||
+        d.includes('TOLLS') || d.includes('PUBLIC_TRANSIT') || d.includes('BIKES_AND_SCOOTERS')) {
+      return 'Transport';
+    }
+    if (d.includes('FLIGHT') || d.includes('LODGING') || d.includes('RENTAL_CARS')) {
+      return 'Transport';
+    }
+  }
+
+  // Merchant overrides — pattern-matched chains we know are mis-bucketed.
   if (FOOD_MERCHANTS.test(merchant)) return 'Food & Dining';
   if (SUBSCRIPTION_MERCHANTS.test(merchant)) return 'Subscriptions';
   if (TRANSPORT_MERCHANTS.test(merchant)) return 'Transport';
@@ -74,6 +123,17 @@ export function mapToVelaCategory(plaidPrimary, _plaidSecondary, name, merchantN
   if (INVESTMENT_MERCHANTS.test(merchant)) return 'Investment';
   if (SHOPPING_MERCHANTS.test(merchant)) return 'Shopping';
 
+  // Plaid's PFC primary — clean mapping table. Preferred over legacy.
+  if (pfcPrimary && PFC_TO_VELA[pfcPrimary]) {
+    let mapped = PFC_TO_VELA[pfcPrimary];
+    // TRANSFER on a credit account = payment-in = Bills, not Investment.
+    if ((pfcPrimary === 'TRANSFER_IN' || pfcPrimary === 'TRANSFER_OUT') && accountType === 'credit') {
+      mapped = 'Bills';
+    }
+    return mapped;
+  }
+
+  // Legacy `category` fallback for older accounts/items.
   if (!plaidPrimary) return 'Other';
   const p = plaidPrimary.toLowerCase();
   if (p.includes('credit_card') || p.includes('loan_payment')) return 'Bills';
@@ -170,18 +230,28 @@ export async function upsertTransactionsFromPlaid(supabase, userId, plaidTxns) {
       const accountId = accountIdMap[t.account_id];
       if (!accountId) return null;
       const [primary, secondary] = t.category || [];
+      const pfcPrimary = t.personal_finance_category?.primary || null;
+      const pfcDetailed = t.personal_finance_category?.detailed || null;
       const accountType = accountTypeByPlaidId[t.account_id];
 
       let velaCategory;
       // On a credit card account, a negative-amount transaction is a payment
       // INTO the card (reducing balance owed). That's a Bills transfer, not
-      // a spend. We also surface it as Bills on the funding side via the
-      // PAYMENT_PATTERN check inside mapToVelaCategory.
+      // a spend.
       if (accountType === 'credit' && Number(t.amount) < 0) {
         velaCategory = 'Bills';
       } else {
-        velaCategory = mapToVelaCategory(primary, secondary, t.name, t.merchant_name, accountType);
+        velaCategory = mapToVelaCategory(
+          primary, secondary, t.name, t.merchant_name, accountType,
+          pfcPrimary, pfcDetailed
+        );
       }
+
+      // Keep the most informative subcategory string for display ("Pizza" beats
+      // "FOOD_AND_DRINK_FAST_FOOD" beats "Restaurants" beats nothing).
+      const subForDisplay = secondary || (pfcDetailed
+        ? pfcDetailed.replace(/^[A-Z_]+_/, '').replace(/_/g, ' ').toLowerCase()
+        : null) || primary || null;
 
       return {
         user_id: userId,
@@ -191,7 +261,7 @@ export async function upsertTransactionsFromPlaid(supabase, userId, plaidTxns) {
         merchant_name: t.merchant_name,
         amount: t.amount,
         category: velaCategory,
-        subcategory: secondary || primary || null,
+        subcategory: subForDisplay,
         date: t.date,
         pending: Boolean(t.pending),
       };
