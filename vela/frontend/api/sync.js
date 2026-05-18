@@ -58,14 +58,15 @@ export default async function handler(req, res) {
       return res.status(200).json({ success: true, new_transactions: 0, items: 0 });
     }
 
-    // 30-day rolling window. Idempotent (upsert by plaid_transaction_id)
-    // so refetching old days is cheap, and gives us a buffer to catch
-    // late-posted transactions (credit cards often post 1-3 days after
-    // the swipe).
-    const start = isoDateOffset(-30);
+    // 90-day rolling window. Idempotent upsert by plaid_transaction_id
+    // makes re-fetching cheap; the wider window catches late-posted
+    // credit card transactions (1-3 day post-swipe lag is common) and
+    // back-fills if Plaid's initial pull hadn't finished at link time.
+    const start = isoDateOffset(-90);
     const end = isoDateOffset(0);
     let newTxns = 0;
     let branded = 0;
+    const pending = [];
 
     for (const item of items) {
       try {
@@ -76,8 +77,20 @@ export default async function handler(req, res) {
         console.info(`[plaid] sync: ${item.institution_name} returned ${acc.accounts.length} accounts`);
         await upsertAccountsFromPlaid(supabaseAdmin, user.id, item.id, acc.accounts);
 
-        const txns = await fetchAllTransactions(item.plaid_access_token, start, end);
-        newTxns += await upsertTransactionsFromPlaid(supabaseAdmin, user.id, txns);
+        try {
+          const txns = await fetchAllTransactions(item.plaid_access_token, start, end);
+          newTxns += await upsertTransactionsFromPlaid(supabaseAdmin, user.id, txns);
+        } catch (txErr) {
+          const code = txErr?.response?.data?.error_code;
+          if (code === 'PRODUCT_NOT_READY' || code === 'TRANSACTIONS_LIMIT') {
+            // Plaid's initial pull for this item is still warming up. Common
+            // for credit cards in the first 30 min after link.
+            pending.push(item.institution_name);
+            console.info(`[plaid] sync: ${item.institution_name} txns not ready yet (${code})`);
+          } else {
+            throw txErr;
+          }
+        }
       } catch (itemErr) {
         console.warn(
           `[plaid] sync failed for item ${item.id} (${item.institution_name})`,
@@ -91,6 +104,7 @@ export default async function handler(req, res) {
       new_transactions: newTxns,
       items: items.length,
       branded,
+      pending, // institution names whose initial transaction pull isn't ready
     });
   } catch (err) {
     console.error('[plaid] sync failed', plaidErrorMessage(err));

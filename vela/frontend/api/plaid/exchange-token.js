@@ -83,10 +83,11 @@ export default async function handler(req, res) {
 
     let txnCount = 0;
     try {
-      // Initial pull: 90 days of history so the user lands with a meaningful
-      // baseline (Origin/Copilot both default to ~3 months on first link).
-      // Subsequent /api/sync calls top up with the last 7 days incrementally.
-      const start = isoDateOffset(-90);
+      // Initial pull: 2 years of history. Plaid returns whatever the
+      // institution exposes (some cap at 24 months, others at 90 days);
+      // requesting the wider window costs nothing extra and we keep what
+      // comes back.
+      const start = isoDateOffset(-730);
       const end = isoDateOffset(0);
       const txns = await fetchAllTransactions(accessToken, start, end);
       txnCount = await upsertTransactionsFromPlaid(supabaseAdmin, user.id, txns);
