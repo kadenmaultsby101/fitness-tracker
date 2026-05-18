@@ -106,7 +106,11 @@ export default function MorePage({ data, session, onSignOut }) {
       });
       const body = await res.json();
       if (!res.ok) throw new Error(body.error || `HTTP ${res.status}`);
-      setSyncMsg(`Synced ${body.items} item${body.items === 1 ? '' : 's'} · ${body.new_transactions} new txn${body.new_transactions === 1 ? '' : 's'}`);
+      const base = `Synced ${body.items} item${body.items === 1 ? '' : 's'} · ${body.new_transactions} new txn${body.new_transactions === 1 ? '' : 's'}`;
+      const pendingNote = body.pending?.length
+        ? ` · ${body.pending.join(', ')} still warming up (Plaid takes 1-30 min for new credit cards)`
+        : '';
+      setSyncMsg(base + pendingNote);
       data.refresh();
     } catch (e) {
       const msg = e?.name === 'AbortError'
