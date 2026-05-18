@@ -48,7 +48,6 @@ export default function AuthScreen() {
           options: { data: { name: name.trim() } },
         });
         if (error) throw error;
-        // If the project requires email confirmation, there'll be no session yet.
         if (!data.session) {
           setInfo('Check your email to confirm your account, then sign in.');
           setMode('signin');
@@ -56,10 +55,31 @@ export default function AuthScreen() {
       } else {
         const { error } = await supabase.auth.signInWithPassword({ email, password });
         if (error) throw error;
-        // App.jsx listens for the auth state change and swaps the screen.
       }
     } catch (err) {
       setError(err.message || 'Something went wrong.');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const sendPasswordReset = async () => {
+    if (busy) return;
+    setError('');
+    setInfo('');
+    if (!email) {
+      setError('Enter your email above first, then tap "Forgot password".');
+      return;
+    }
+    setBusy(true);
+    try {
+      const { error } = await supabase.auth.resetPasswordForEmail(email, {
+        redirectTo: `${window.location.origin}/`,
+      });
+      if (error) throw error;
+      setInfo(`Reset link sent to ${email}. Check your inbox.`);
+    } catch (err) {
+      setError(err.message || 'Could not send reset link.');
     } finally {
       setBusy(false);
     }
@@ -157,6 +177,40 @@ export default function AuthScreen() {
         <button type="submit" className="auth-submit" disabled={busy}>
           {busy ? '…' : isSignup ? 'Create Account →' : 'Sign In →'}
         </button>
+
+        {!isSignup && (
+          <button
+            type="button"
+            onClick={sendPasswordReset}
+            disabled={busy}
+            style={{
+              background: 'none',
+              border: 'none',
+              color: 'var(--t2)',
+              fontSize: 10,
+              letterSpacing: 1.5,
+              textTransform: 'uppercase',
+              cursor: 'pointer',
+              padding: '10px 0 4px',
+              width: '100%',
+              textAlign: 'center',
+            }}
+          >
+            Forgot password?
+          </button>
+        )}
+
+        {isSignup && (
+          <div style={{
+            fontSize: 10,
+            color: 'var(--t3)',
+            lineHeight: 1.55,
+            padding: '12px 4px 0',
+            textAlign: 'center',
+          }}>
+            Vela connects via <strong style={{ color: 'var(--t2)' }}>Plaid (read-only)</strong> — no bank passwords stored. <strong style={{ color: 'var(--t2)' }}>Sage AI</strong> sees your financial data to give advice. Currently in private beta — your data is visible to the Vela admin.
+          </div>
+        )}
 
         <div className="auth-footer">
           {isSignup ? 'Already have an account?' : "Don't have one yet?"}{' '}

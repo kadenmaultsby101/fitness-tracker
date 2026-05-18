@@ -37,43 +37,71 @@ export default function MainApp({ session }) {
 
   // Auto-sync Plaid accounts in the background on app open. Fire-and-forget:
   // we don't block the UI on it, and we don't show errors. The Plaid endpoint
-  // pulls the last 7 days of transactions per item, idempotently — so even
-  // if the user just synced, this is a cheap no-op.
+  // pulls the last 90 days of transactions per item, idempotently.
   // Only runs once per mount, only if the backend is configured.
   const autoSyncedRef = useRef(false);
+  const lastSyncRef = useRef(0);
+
+  const runBackgroundSync = async ({ controllerOpts } = {}) => {
+    if (!BACKEND_AVAILABLE) return;
+    // Don't double-fire if a sync ran in the last 60s (e.g. tab focus
+    // immediately after the periodic timer).
+    const now = Date.now();
+    if (now - lastSyncRef.current < 60_000) return;
+    lastSyncRef.current = now;
+
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 90000);
+    try {
+      const { data: sess } = await supabase.auth.getSession();
+      const token = sess.session?.access_token;
+      if (!token) return;
+      const res = await fetch(`${API}/api/sync`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+        signal: controller.signal,
+        ...(controllerOpts || {}),
+      });
+      if (!res.ok) {
+        console.warn('[vela] auto-sync skipped:', res.status);
+        return;
+      }
+      const body = await res.json();
+      console.info('[vela] auto-sync result', body);
+      if (body.new_transactions > 0 || body.items > 0) {
+        data.refresh();
+      }
+    } catch (err) {
+      console.warn('[vela] auto-sync failed', err?.message);
+    } finally {
+      clearTimeout(timer);
+    }
+  };
+
+  // Initial sync on mount
   useEffect(() => {
     if (autoSyncedRef.current) return;
-    if (!BACKEND_AVAILABLE) return;
     autoSyncedRef.current = true;
+    runBackgroundSync();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
-    (async () => {
-      const controller = new AbortController();
-      const timer = setTimeout(() => controller.abort(), 90000);
-      try {
-        const { data: sess } = await supabase.auth.getSession();
-        const token = sess.session?.access_token;
-        if (!token) return;
-        const res = await fetch(`${API}/api/sync`, {
-          method: 'POST',
-          headers: { Authorization: `Bearer ${token}` },
-          signal: controller.signal,
-        });
-        if (!res.ok) {
-          console.warn('[vela] auto-sync skipped:', res.status);
-          return;
-        }
-        const body = await res.json();
-        console.info('[vela] auto-sync result', body);
-        if (body.new_transactions > 0 || body.items > 0) {
-          data.refresh();
-        }
-      } catch (err) {
-        // Background sync failure is non-fatal — user can still tap Sync now manually
-        console.warn('[vela] auto-sync failed', err);
-      } finally {
-        clearTimeout(timer);
-      }
-    })();
+  // Periodic sync every 10 minutes while the app is open, plus a sync on
+  // tab focus (when the user comes back to Vela from another tab). The
+  // 60s debounce in runBackgroundSync prevents double-firing.
+  useEffect(() => {
+    if (!BACKEND_AVAILABLE) return;
+    const onFocus = () => {
+      if (document.visibilityState === 'visible') runBackgroundSync();
+    };
+    document.addEventListener('visibilitychange', onFocus);
+    window.addEventListener('focus', onFocus);
+    const interval = setInterval(runBackgroundSync, 10 * 60 * 1000);
+    return () => {
+      document.removeEventListener('visibilitychange', onFocus);
+      window.removeEventListener('focus', onFocus);
+      clearInterval(interval);
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
