@@ -19,7 +19,10 @@ export default function HomePage({ data, session, onAddTxn, onEditAccount, onEdi
     'there';
   const today = new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 
-  const recent = transactions.slice(0, 5);
+  const sevenDaysAgo = new Date();
+  sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+  const sevenDaysIso = sevenDaysAgo.toISOString().slice(0, 10);
+  const recent = transactions.filter((t) => t.date >= sevenDaysIso).slice(0, 10);
   const hasAccounts = accounts.length > 0;
   const hasTxns = transactions.length > 0;
   const plaidConnected = accounts.some((a) => !String(a.plaid_account_id || '').startsWith('manual_'));
@@ -70,6 +73,17 @@ export default function HomePage({ data, session, onAddTxn, onEditAccount, onEdi
         <div className="nw-amt">
           <AnimatedNumber value={derived.netWorth} format={(n) => money(n)} />
         </div>
+        {derived.monthIncome > 0 || derived.monthSpent > 0 ? (
+          <div style={{
+            fontSize: 10.5,
+            color: derived.monthRemaining >= 0 ? 'var(--green)' : 'var(--red)',
+            fontFamily: 'var(--mono)',
+            letterSpacing: 0.5,
+            marginTop: 4,
+          }}>
+            {derived.monthRemaining >= 0 ? '↑' : '↓'} {money(Math.abs(derived.monthRemaining))} cash flow this month
+          </div>
+        ) : null}
         <div className="nw-row">
           <span className="nw-pct">
             {accounts.length} {accounts.length === 1 ? 'account' : 'accounts'}
@@ -225,14 +239,14 @@ export default function HomePage({ data, session, onAddTxn, onEditAccount, onEdi
 
       <div className="card">
         <div className="ctitle">
-          <span>Recent Transactions</span>
+          <span>This Week's Transactions</span>
           <button type="button" className="ctitle-act" onClick={onAddTxn}>+ Add</button>
         </div>
         {loading ? (
           <SkeletonRows />
         ) : recent.length === 0 ? (
           <div style={{ fontSize: 11, color: 'var(--t3)', lineHeight: 1.7, padding: '4px 0' }}>
-            Nothing yet. Tap + to log income or an expense.
+            Nothing in the last 7 days. Tap + to log a cash transaction, or hit Sync on More to pull from Plaid.
           </div>
         ) : (
           recent.map((t) => {

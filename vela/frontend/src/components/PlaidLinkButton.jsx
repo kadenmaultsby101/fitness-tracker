@@ -27,17 +27,32 @@ export default function PlaidLinkButton({ onConnected, variant = 'primary' }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [step, setStep] = useState(0);
-  // Token captured at mount so we never need to call supabase.auth.getSession()
-  // from inside Plaid's onSuccess callback — that call has been observed to
-  // hang after the Plaid iframe closes on some browsers (likely localStorage
-  // contention with the iframe teardown).
+  const [fetchingToken, setFetchingToken] = useState(false);
+  const [elapsed, setElapsed] = useState(0);
+  const [tokenAttempt, setTokenAttempt] = useState(0);
   const tokenRef = useRef(null);
+
+  // Tick a visible elapsed-seconds counter while we're waiting for a link
+  // token — gives the user concrete feedback that something is happening
+  // and a clear threshold for "this is broken, retry."
+  useEffect(() => {
+    if (!fetchingToken) {
+      setElapsed(0);
+      return;
+    }
+    const t0 = Date.now();
+    setElapsed(0);
+    const id = setInterval(() => setElapsed(Math.floor((Date.now() - t0) / 1000)), 250);
+    return () => clearInterval(id);
+  }, [fetchingToken]);
 
   useEffect(() => {
     let cancelled = false;
+    setFetchingToken(true);
+    setError('');
+    setLinkToken(null);
     (async () => {
       try {
-        setError('');
         const { data } = await supabase.auth.getSession();
         const token = data.session?.access_token;
         if (!token) throw new Error('Not signed in.');
@@ -52,13 +67,20 @@ export default function PlaidLinkButton({ onConnected, variant = 'primary' }) {
         if (!cancelled) setLinkToken(body.link_token);
       } catch (e) {
         const msg = e?.name === 'AbortError'
-          ? 'Backend not responding (30s). Refresh.'
+          ? 'Backend timed out (30s).'
           : e?.message || 'Failed to reach backend.';
         if (!cancelled) setError(msg);
+      } finally {
+        if (!cancelled) setFetchingToken(false);
       }
     })();
     return () => { cancelled = true; };
-  }, []);
+  }, [tokenAttempt]);
+
+  const retry = () => {
+    setError('');
+    setTokenAttempt((n) => n + 1);
+  };
 
   const onSuccess = useCallback(
     (public_token, metadata) => {
@@ -120,12 +142,24 @@ export default function PlaidLinkButton({ onConnected, variant = 'primary' }) {
   const label = busy
     ? `Connecting… (${step}/5)`
     : !linkToken && !error
-      ? 'Preparing…'
+      ? `Preparing… (${elapsed}s)`
       : 'Connect a bank →';
 
   return (
     <div className="plk-wrap">
-      {error && <div className="plk-error">{error}</div>}
+      {error && (
+        <>
+          <div className="plk-error">{error}</div>
+          <button
+            type="button"
+            className="bsec"
+            style={{ width: '100%', marginBottom: 10 }}
+            onClick={retry}
+          >
+            Try again
+          </button>
+        </>
+      )}
       <button
         type="button"
         className={`plk-btn ${variant === 'secondary' ? 'plk-sec' : 'plk-pri'}`}
@@ -153,7 +187,9 @@ export default function PlaidLinkButton({ onConnected, variant = 'primary' }) {
           textAlign: 'center',
           lineHeight: 1.5,
         }}>
-          Asking Plaid for a link token…
+          {elapsed > 20
+            ? 'Plaid is slow — give it another few seconds or hit Retry'
+            : 'Asking Plaid for a link token…'}
         </div>
       )}
     </div>

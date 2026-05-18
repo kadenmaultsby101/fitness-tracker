@@ -1,6 +1,7 @@
 import { money, moneyAbs, emojiFor, relDate } from './format';
 import { colorFor } from './categoryColors';
-import SpendingBreakdown from './SpendingBreakdown';
+import SpendingDonut from './SpendingDonut';
+import WeeklyTrend from './WeeklyTrend';
 
 export default function BudgetPage({ data, onEditBudgets, onAddTxn, onEditTxn }) {
   const { transactions, budgets, derived, profile } = data;
@@ -62,11 +63,16 @@ export default function BudgetPage({ data, onEditBudgets, onAddTxn, onEditTxn })
       </div>
 
       <div className="card">
-        <div className="ctitle">Spending Breakdown</div>
-        <SpendingBreakdown
+        <div className="ctitle">Spending by Category</div>
+        <SpendingDonut
           byCategory={derived.byCategory}
           monthSpent={derived.monthSpent}
         />
+      </div>
+
+      <div className="card">
+        <div className="ctitle">Weekly Spending</div>
+        <WeeklyTrend transactions={transactions} />
       </div>
 
       <div className="card">
