@@ -1,8 +1,9 @@
 import { useState } from 'react';
 import { supabase } from '../../lib/supabase';
+import { withTimeout } from '../../lib/withTimeout';
 
 // Friends-and-family feedback inbox. Lives on More.
-// Saves to the `feedback` table; Kaden reads via the Supabase Table Editor.
+// Saves to the `feedback` table; admin reads via the Supabase Table Editor.
 export default function FeedbackCard({ session }) {
   const [msg, setMsg] = useState('');
   const [busy, setBusy] = useState(false);
@@ -14,19 +15,33 @@ export default function FeedbackCard({ session }) {
     setBusy(true);
     setError('');
     try {
-      const { error: e } = await supabase.from('feedback').insert({
-        user_id: session?.user?.id || null,
-        user_email: session?.user?.email || null,
-        message: msg.trim(),
-        page: typeof window !== 'undefined' ? window.location.pathname : null,
-        user_agent: typeof navigator !== 'undefined' ? navigator.userAgent.slice(0, 300) : null,
-      });
-      if (e) throw e;
+      const { error: e } = await withTimeout(
+        supabase.from('feedback').insert({
+          user_id: session?.user?.id || null,
+          user_email: session?.user?.email || null,
+          message: msg.trim(),
+          page: typeof window !== 'undefined' ? window.location.pathname : null,
+          user_agent: typeof navigator !== 'undefined' ? navigator.userAgent.slice(0, 300) : null,
+        }),
+        10000
+      );
+      if (e) {
+        // Common case: migration 05_feedback.sql not yet run in Supabase.
+        // Supabase returns 'relation "feedback" does not exist' or similar.
+        if (/relation .*feedback.* does not exist|table .*feedback.* does not exist/i.test(e.message || '')) {
+          throw new Error("Feedback table doesn't exist yet — admin needs to run migration 05 in Supabase.");
+        }
+        throw e;
+      }
       setDone(true);
       setMsg('');
       setTimeout(() => setDone(false), 6000);
     } catch (err) {
-      setError(err?.message || 'Could not send. Try again.');
+      const m = err?.message || '';
+      const friendly = /timeout|timed out/i.test(m)
+        ? 'Network timed out. Check your connection and try again.'
+        : m || 'Could not send. Try again.';
+      setError(friendly);
     } finally {
       setBusy(false);
     }
