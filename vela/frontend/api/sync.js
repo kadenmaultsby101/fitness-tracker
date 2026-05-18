@@ -58,7 +58,11 @@ export default async function handler(req, res) {
       return res.status(200).json({ success: true, new_transactions: 0, items: 0 });
     }
 
-    const start = isoDateOffset(-7);
+    // 30-day rolling window. Idempotent (upsert by plaid_transaction_id)
+    // so refetching old days is cheap, and gives us a buffer to catch
+    // late-posted transactions (credit cards often post 1-3 days after
+    // the swipe).
+    const start = isoDateOffset(-30);
     const end = isoDateOffset(0);
     let newTxns = 0;
     let branded = 0;
