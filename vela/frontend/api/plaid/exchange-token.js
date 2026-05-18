@@ -7,10 +7,30 @@ import {
   fetchAllTransactions,
   upsertTransactionsFromPlaid,
 } from '../_lib/plaid.js';
+import { CountryCode } from 'plaid';
 
-// Vercel function config: allow up to 60s for the initial Plaid call on
-// Production (first transactionsGet can be slow).
 export const config = { maxDuration: 60 };
+
+// Fetch institution branding (logo as base64, primary brand color as hex).
+// Returns { logo, color } — both nullable if Plaid doesn't have them or
+// the call fails (non-fatal).
+async function fetchInstitutionBranding(institutionId) {
+  if (!institutionId) return { logo: null, color: null };
+  try {
+    const { data } = await plaid.institutionsGetById({
+      institution_id: institutionId,
+      country_codes: [CountryCode.Us],
+      options: { include_optional_metadata: true },
+    });
+    return {
+      logo: data?.institution?.logo || null,
+      color: data?.institution?.primary_color || null,
+    };
+  } catch (e) {
+    console.warn('[plaid] institutionsGetById failed (non-fatal):', plaidErrorMessage(e));
+    return { logo: null, color: null };
+  }
+}
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
@@ -24,12 +44,12 @@ export default async function handler(req, res) {
     const { public_token, institution } = req.body || {};
     if (!public_token) return res.status(400).json({ error: 'public_token required' });
 
-    // 1. Exchange public_token for permanent access_token
     const { data: exch } = await plaid.itemPublicTokenExchange({ public_token });
     const accessToken = exch.access_token;
     const plaidItemId = exch.item_id;
 
-    // 2. Save plaid_items row
+    const branding = await fetchInstitutionBranding(institution?.institution_id);
+
     const { data: itemRow, error: itemErr } = await supabaseAdmin
       .from('plaid_items')
       .insert({
@@ -38,19 +58,16 @@ export default async function handler(req, res) {
         plaid_access_token: accessToken,
         institution_name: institution?.name || 'Unknown',
         institution_id: institution?.institution_id || null,
+        institution_logo: branding.logo,
+        institution_color: branding.color,
       })
       .select('id')
       .single();
     if (itemErr) throw itemErr;
 
-    // 3. Pull accounts and upsert
     const { data: acc } = await plaid.accountsGet({ access_token: accessToken });
     await upsertAccountsFromPlaid(supabaseAdmin, user.id, itemRow.id, acc.accounts);
 
-    // 4. Try transactions inline (small enough to fit in 60s on most accounts).
-    //    On Production, first transactionsGet can be slow — if it errors, we
-    //    just log and continue. The frontend's auto-sync on next mount or
-    //    manual Sync button will backfill anything missed (idempotent upsert).
     let txnCount = 0;
     try {
       const start = isoDateOffset(-30);

@@ -1,18 +1,18 @@
 import { money, moneyAbs, emojiFor, relDate, displayAccountName } from './format';
 import AnimatedNumber from './AnimatedNumber';
-import { BACKEND_AVAILABLE } from '../../lib/apiUrl';
+import BankLogo from './BankLogo';
 
-function setupSteps({ transactions, goals, budgets, plaidConnected }) {
+function setupSteps({ goals, budgets, plaidConnected }) {
   return [
-    { key: 'plaid',    done: plaidConnected,           label: 'Connect a bank via Plaid' },
-    { key: 'txn',      done: transactions.length > 0,  label: 'Log a transaction (optional cash)', optional: true },
-    { key: 'goal',     done: goals.length > 0,         label: 'Create a goal' },
-    { key: 'budget',   done: budgets.length > 0,       label: 'Set a monthly budget' },
+    { key: 'plaid',  done: plaidConnected,    label: 'Connect a bank via Plaid' },
+    { key: 'goal',   done: goals.length > 0,  label: 'Create a goal' },
+    { key: 'budget', done: budgets.length > 0, label: 'Set a monthly budget' },
   ];
 }
 
 export default function HomePage({ data, session, onAddTxn, onEditAccount, onEditTxn, onGoTo }) {
-  const { profile, accounts, transactions, goals, budgets, derived, loading, error } = data;
+  const { profile, accounts, plaidItems = [], transactions, goals, budgets, derived, loading, error } = data;
+  const itemsById = Object.fromEntries(plaidItems.map((it) => [it.id, it]));
   const firstName =
     (profile?.name || session?.user?.user_metadata?.name || '').split(' ')[0] ||
     'there';
@@ -24,7 +24,7 @@ export default function HomePage({ data, session, onAddTxn, onEditAccount, onEdi
   const plaidConnected = accounts.some((a) => !String(a.plaid_account_id || '').startsWith('manual_'));
 
   // Setup checklist — hides itself once every required step is done.
-  const steps = setupSteps({ transactions, goals, budgets, plaidConnected });
+  const steps = setupSteps({ goals, budgets, plaidConnected });
   const required = steps.filter((s) => !s.optional);
   const completed = required.filter((s) => s.done).length;
   const showChecklist = completed < required.length;
@@ -96,8 +96,7 @@ export default function HomePage({ data, session, onAddTxn, onEditAccount, onEdi
               key={s.key}
               type="button"
               onClick={() => {
-                if (s.key === 'txn') onAddTxn();
-                else if (s.key === 'goal') onGoTo('goals');
+                if (s.key === 'goal') onGoTo('goals');
                 else if (s.key === 'budget') onGoTo('budget');
                 else if (s.key === 'plaid') onGoTo('more');
               }}
@@ -190,6 +189,8 @@ export default function HomePage({ data, session, onAddTxn, onEditAccount, onEdi
           {accounts.map((a) => {
             const isDebt = a.type === 'credit' || a.type === 'loan';
             const bal = Number(a.balance_current) || 0;
+            const item = itemsById[a.plaid_item_id];
+            const accent = item?.institution_color;
             return (
               <div
                 key={a.id}
@@ -197,9 +198,17 @@ export default function HomePage({ data, session, onAddTxn, onEditAccount, onEdi
                 onClick={() => onEditAccount?.(a)}
                 role="button"
                 tabIndex={0}
-                style={{ cursor: onEditAccount ? 'pointer' : 'default' }}
+                style={{
+                  cursor: onEditAccount ? 'pointer' : 'default',
+                  borderTop: accent ? `2px solid ${accent}` : undefined,
+                }}
               >
-                <div className="am-inst">{a.subtype || a.type}</div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                  <BankLogo item={item} size={22} fallbackName={a.name} />
+                  <div className="am-inst" style={{ margin: 0 }}>
+                    {item?.institution_name || a.subtype || a.type}
+                  </div>
+                </div>
                 <div className="am-nm">
                   {displayAccountName(a)}
                   {a.mask ? ` ··${a.mask}` : ''}
