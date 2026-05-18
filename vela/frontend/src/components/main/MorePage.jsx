@@ -171,7 +171,7 @@ export default function MorePage({ data, session, onSignOut }) {
 
       <div className="card">
         <div className="ctitle">
-          Connected Accounts ({plaidConnectedCount} bank{plaidConnectedCount === 1 ? '' : 's'})
+          Connected Accounts ({plaidConnectedCount} connected)
         </div>
         {loading ? (
           <div style={{ fontSize: 10, letterSpacing: 1.5, color: 'var(--t3)', padding: '4px 0' }}>
@@ -221,6 +221,28 @@ export default function MorePage({ data, session, onSignOut }) {
             );
           })
         )}
+
+        {(() => {
+          const accountedItemIds = new Set(accounts.map((a) => a.plaid_item_id).filter(Boolean));
+          const ghostItems = plaidItems.filter((it) => !accountedItemIds.has(it.id));
+          if (ghostItems.length === 0) return null;
+          return (
+            <div style={{ marginTop: 14, paddingTop: 14, borderTop: '1px solid var(--b1)' }}>
+              <div style={{ fontSize: 9, letterSpacing: 2, textTransform: 'uppercase', color: 'var(--t3)', marginBottom: 8 }}>
+                Linked, no accounts yet
+              </div>
+              {ghostItems.map((it) => (
+                <div key={it.id} className="sr" style={{ alignItems: 'center', gap: 12 }}>
+                  <BankLogo item={it} size={32} fallbackName={it.institution_name} />
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div className="sr-l">{it.institution_name}</div>
+                    <div className="sr-s">Plaid couldn't return accounts. Hit Sync to retry — investment-only institutions may need a product upgrade.</div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          );
+        })()}
       </div>
 
       <div className="card">
