@@ -30,6 +30,7 @@ const monthBounds = () => {
 export function useFinancialData() {
   const [profile, setProfile] = useState(null);
   const [accounts, setAccounts] = useState([]);
+  const [plaidItems, setPlaidItems] = useState([]);
   const [transactions, setTransactions] = useState([]);
   const [goals, setGoals] = useState([]);
   const [budgets, setBudgets] = useState([]);
@@ -54,6 +55,7 @@ export function useFinancialData() {
       const [
         profileRes,
         accountsRes,
+        itemsRes,
         txnsRes,
         goalsRes,
         budgetsRes,
@@ -69,6 +71,10 @@ export function useFinancialData() {
             .select('id, plaid_account_id, plaid_item_id, name, official_name, type, subtype, balance_current, balance_available, currency, mask, updated_at')
             .eq('user_id', userId)
             .order('balance_current', { ascending: false, nullsFirst: false }),
+          supabase
+            .from('plaid_items')
+            .select('id, institution_name, institution_id, institution_logo, institution_color')
+            .eq('user_id', userId),
           supabase
             .from('transactions')
             .select('id, account_id, plaid_transaction_id, name, merchant_name, amount, category, subcategory, date, pending')
@@ -90,7 +96,7 @@ export function useFinancialData() {
       );
 
       const firstError =
-        profileRes.error || accountsRes.error || txnsRes.error || goalsRes.error || budgetsRes.error;
+        profileRes.error || accountsRes.error || itemsRes.error || txnsRes.error || goalsRes.error || budgetsRes.error;
       if (firstError) {
         console.error('useFinancialData error', firstError);
         setError(firstError.message);
@@ -99,6 +105,7 @@ export function useFinancialData() {
       console.info('[vela] data.load result counts', {
         profile: profileRes.data ? 1 : 0,
         accounts: accountsRes.data?.length || 0,
+        plaid_items: itemsRes.data?.length || 0,
         transactions: txnsRes.data?.length || 0,
         goals: goalsRes.data?.length || 0,
         budgets: budgetsRes.data?.length || 0,
@@ -106,6 +113,7 @@ export function useFinancialData() {
 
       setProfile(profileRes.data || null);
       setAccounts(accountsRes.data || []);
+      setPlaidItems(itemsRes.data || []);
       setTransactions(txnsRes.data || []);
       setGoals(goalsRes.data || []);
       setBudgets(budgetsRes.data || []);
@@ -126,6 +134,7 @@ export function useFinancialData() {
   return {
     profile,
     accounts,
+    plaidItems,
     transactions,
     goals,
     budgets,

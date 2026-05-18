@@ -3,6 +3,7 @@ import { supabase } from '../../lib/supabase';
 import { API, BACKEND_AVAILABLE } from '../../lib/apiUrl';
 import { money } from './format';
 import PlaidLinkButton from '../PlaidLinkButton';
+import BankLogo from './BankLogo';
 
 const SETTINGS_KEYS = [
   { col: 'notify_transactions',   lbl: 'Transaction Alerts',   sub: 'Notify on every transaction' },
@@ -12,7 +13,8 @@ const SETTINGS_KEYS = [
 ];
 
 export default function MorePage({ data, session, onSignOut }) {
-  const { profile, accounts, loading, error } = data;
+  const { profile, accounts, plaidItems = [], loading, error } = data;
+  const itemsById = Object.fromEntries(plaidItems.map((it) => [it.id, it]));
   const plaidConnectedCount = accounts.filter(
     (a) => !String(a.plaid_account_id || '').startsWith('manual_')
   ).length;
@@ -197,11 +199,13 @@ export default function MorePage({ data, session, onSignOut }) {
           accounts.map((a) => {
             const isDebt = a.type === 'credit' || a.type === 'loan';
             const bal = Number(a.balance_current) || 0;
+            const item = itemsById[a.plaid_item_id];
             return (
-              <div key={a.id} className="sr">
-                <div>
+              <div key={a.id} className="sr" style={{ alignItems: 'center', gap: 12 }}>
+                <BankLogo item={item} size={32} fallbackName={a.name} />
+                <div style={{ flex: 1, minWidth: 0 }}>
                   <div className="sr-l">{a.name}{a.mask ? ` ··${a.mask}` : ''}</div>
-                  <div className="sr-s">{a.subtype || a.type}</div>
+                  <div className="sr-s">{item?.institution_name || a.subtype || a.type}</div>
                 </div>
                 <div
                   style={{
