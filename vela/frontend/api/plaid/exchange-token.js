@@ -66,6 +66,8 @@ export default async function handler(req, res) {
     if (itemErr) throw itemErr;
 
     const { data: acc } = await plaid.accountsGet({ access_token: accessToken });
+    console.info(`[plaid] accountsGet returned ${acc.accounts.length} accounts for ${institution?.name}`,
+      acc.accounts.map((a) => ({ name: a.name, type: a.type, subtype: a.subtype })));
     await upsertAccountsFromPlaid(supabaseAdmin, user.id, itemRow.id, acc.accounts);
 
     let txnCount = 0;

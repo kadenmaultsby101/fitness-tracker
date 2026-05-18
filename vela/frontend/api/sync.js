@@ -69,6 +69,7 @@ export default async function handler(req, res) {
         if (item.institution_logo || item.institution_color) branded += 1;
 
         const { data: acc } = await plaid.accountsGet({ access_token: item.plaid_access_token });
+        console.info(`[plaid] sync: ${item.institution_name} returned ${acc.accounts.length} accounts`);
         await upsertAccountsFromPlaid(supabaseAdmin, user.id, item.id, acc.accounts);
 
         const txns = await fetchAllTransactions(item.plaid_access_token, start, end);

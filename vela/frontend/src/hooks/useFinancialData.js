@@ -40,18 +40,34 @@ export function useFinancialData() {
   const load = useCallback(async () => {
     setError('');
     try {
-      const { data: sess } = await withTimeout(supabase.auth.getSession(), 6000);
-      const userId = sess.session?.user?.id;
-      if (!userId) {
-        setLoading(false);
-        return;
+      await loadOnce();
+    } catch (err) {
+      // First attempt failed — quietly retry once. Transient blips after
+      // a fresh Plaid connect (DB just wrote new rows, network jittery)
+      // shouldn't bother the user with a Retry button if a single re-try
+      // would have worked.
+      console.warn('[vela] data.load first attempt failed, retrying:', err?.message);
+      try {
+        await loadOnce();
+        setError(''); // recovered
+      } catch (err2) {
+        console.error('useFinancialData second attempt failed', err2);
+        setError(err2?.message || 'Failed to load data.');
       }
+    } finally {
+      setLoading(false);
+    }
+  }, []);
 
-      const my = currentMonthYear();
+  const loadOnce = async () => {
+    const { data: sess } = await withTimeout(supabase.auth.getSession(), 6000);
+    const userId = sess.session?.user?.id;
+    if (!userId) {
+      return;
+    }
 
-      // Cap the whole parallel batch at 10s. If Supabase is dragging,
-      // we land with empty arrays + an error instead of leaving the UI
-      // stuck on skeletons.
+    const my = currentMonthYear();
+
       const [
         profileRes,
         accountsRes,
@@ -92,14 +108,13 @@ export function useFinancialData() {
             .eq('user_id', userId)
             .eq('month_year', my),
         ]),
-        10000
+        15000
       );
 
       const firstError =
         profileRes.error || accountsRes.error || itemsRes.error || txnsRes.error || goalsRes.error || budgetsRes.error;
       if (firstError) {
-        console.error('useFinancialData error', firstError);
-        setError(firstError.message);
+        throw new Error(firstError.message);
       }
 
       console.info('[vela] data.load result counts', {
@@ -117,13 +132,7 @@ export function useFinancialData() {
       setTransactions(txnsRes.data || []);
       setGoals(goalsRes.data || []);
       setBudgets(budgetsRes.data || []);
-    } catch (err) {
-      console.error('useFinancialData load threw', err);
-      setError(err?.message || 'Failed to load data.');
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+  };
 
   useEffect(() => {
     load();
