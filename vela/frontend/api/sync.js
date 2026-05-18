@@ -7,8 +7,38 @@ import {
   fetchAllTransactions,
   upsertTransactionsFromPlaid,
 } from './_lib/plaid.js';
+import { CountryCode } from 'plaid';
 
 export const config = { maxDuration: 60 };
+
+// Self-heal: if an item is missing branding (logo/color) — either because it
+// was created before migration 04, or because institutionsGetById was rate-
+// limited during exchange — fetch it now and patch the row. Best-effort,
+// silent on failure.
+async function backfillBranding(item) {
+  if (!item.institution_id) return;
+  if (item.institution_logo && item.institution_color) return;
+  try {
+    const { data } = await plaid.institutionsGetById({
+      institution_id: item.institution_id,
+      country_codes: [CountryCode.Us],
+      options: { include_optional_metadata: true },
+    });
+    const patch = {};
+    if (!item.institution_logo && data?.institution?.logo) {
+      patch.institution_logo = data.institution.logo;
+    }
+    if (!item.institution_color && data?.institution?.primary_color) {
+      patch.institution_color = data.institution.primary_color;
+    }
+    if (Object.keys(patch).length > 0) {
+      await supabaseAdmin.from('plaid_items').update(patch).eq('id', item.id);
+      console.info(`[plaid] backfilled branding for ${item.institution_name}`, Object.keys(patch));
+    }
+  } catch (e) {
+    console.warn('[plaid] branding backfill failed:', plaidErrorMessage(e));
+  }
+}
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
@@ -20,7 +50,7 @@ export default async function handler(req, res) {
 
     const { data: items, error: itemsErr } = await supabaseAdmin
       .from('plaid_items')
-      .select('id, plaid_access_token, institution_name')
+      .select('id, plaid_access_token, institution_name, institution_id, institution_logo, institution_color')
       .eq('user_id', user.id);
     if (itemsErr) throw itemsErr;
 
@@ -31,9 +61,13 @@ export default async function handler(req, res) {
     const start = isoDateOffset(-7);
     const end = isoDateOffset(0);
     let newTxns = 0;
+    let branded = 0;
 
     for (const item of items) {
       try {
+        await backfillBranding(item);
+        if (item.institution_logo || item.institution_color) branded += 1;
+
         const { data: acc } = await plaid.accountsGet({ access_token: item.plaid_access_token });
         await upsertAccountsFromPlaid(supabaseAdmin, user.id, item.id, acc.accounts);
 
@@ -47,7 +81,12 @@ export default async function handler(req, res) {
       }
     }
 
-    res.status(200).json({ success: true, new_transactions: newTxns, items: items.length });
+    res.status(200).json({
+      success: true,
+      new_transactions: newTxns,
+      items: items.length,
+      branded,
+    });
   } catch (err) {
     console.error('[plaid] sync failed', plaidErrorMessage(err));
     res.status(500).json({ error: plaidErrorMessage(err) });
