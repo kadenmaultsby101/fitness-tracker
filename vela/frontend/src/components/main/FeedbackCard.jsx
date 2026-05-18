@@ -36,7 +36,7 @@ export default function FeedbackCard({ session }) {
     <div className="card">
       <div className="ctitle">Feedback</div>
       <div style={{ fontSize: 11, color: 'var(--t2)', lineHeight: 1.7, marginBottom: 12 }}>
-        Found a bug, hate how something looks, or have an idea? Drop a note — it goes straight to Kaden.
+        Found a bug, hate how something looks, or have an idea? Drop a note — it goes straight to Vela.
       </div>
       <textarea
         className="cin"
