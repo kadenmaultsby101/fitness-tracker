@@ -7,6 +7,7 @@ import BudgetPage from './BudgetPage';
 import GoalsPage from './GoalsPage';
 import SagePage from './SagePage';
 import MorePage from './MorePage';
+import AccountDetailPage from './AccountDetailPage';
 import AddTransactionModal from './AddTransactionModal';
 import AddAccountModal from './AddAccountModal';
 import GoalModal from './GoalModal';
@@ -23,8 +24,14 @@ const NAV = [
 
 export default function MainApp({ session }) {
   const [page, setPage] = useState('home');
+  const [selectedAccountId, setSelectedAccountId] = useState(null);
   const [modal, setModal] = useState(null); // 'txn' | { kind: 'editAccount', account } | { kind: 'editTxn', txn } | { kind: 'goal', goal? } | 'budget'
   const data = useFinancialData();
+
+  const openAccount = (a) => {
+    setSelectedAccountId(a.id);
+    setPage('account');
+  };
 
   const closeModal = () => setModal(null);
 
@@ -82,7 +89,7 @@ export default function MainApp({ session }) {
         data={data}
         session={session}
         onAddTxn={() => setModal('txn')}
-        onEditAccount={(a) => setModal({ kind: 'editAccount', account: a })}
+        onOpenAccount={openAccount}
         onEditTxn={(t) => setModal({ kind: 'editTxn', txn: t })}
         onGoTo={setPage}
       />
@@ -112,6 +119,17 @@ export default function MainApp({ session }) {
         data={data}
         session={session}
         onSignOut={() => supabase.auth.signOut()}
+        onOpenAccount={openAccount}
+      />
+    );
+  } else if (page === 'account') {
+    activePage = (
+      <AccountDetailPage
+        data={data}
+        accountId={selectedAccountId}
+        onBack={() => { setSelectedAccountId(null); setPage('home'); }}
+        onEditAccount={(a) => setModal({ kind: 'editAccount', account: a })}
+        onEditTxn={(t) => setModal({ kind: 'editTxn', txn: t })}
       />
     );
   }

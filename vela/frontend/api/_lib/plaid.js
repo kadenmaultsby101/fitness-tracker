@@ -31,6 +31,48 @@ export function plaidErrorMessage(err) {
   );
 }
 
+// Translate Plaid's transaction category (either the legacy "category" array
+// or the newer personal_finance_category) into Vela's canonical category set.
+// Vela categories: Housing, Food & Dining, Transport, Shopping, Subscriptions,
+// Entertainment, Bills, Income, Investment, Other.
+//
+// We also pattern-match the merchant/name as a fallback for transactions
+// where Plaid returns no category (common with debit card swipes).
+const SUBSCRIPTION_MERCHANTS = /(netflix|hulu|spotify|apple\.com\/bill|youtube|disney|hbo|paramount|peacock|prime video|chatgpt|openai|claude|github|notion|figma|dropbox|icloud)/i;
+const FOOD_MERCHANTS = /(starbucks|chipotle|chick-fil-a|mcdonald|wendy|burger king|taco bell|subway|domino|pizza|panera|sweetgreen|shake shack|cava|five guys|kfc|in.?n.?out|whataburger|dunkin|peet|blue bottle|cafe|coffee|restaurant|grill|kitchen|deli|bistro|brewery|bar |tavern|diner|eatery)/i;
+const TRANSPORT_MERCHANTS = /(uber|lyft|chevron|shell|exxon|mobil|bp |speedway|sunoco|costco gas|wawa|7.eleven gas|valero|ampm|amtrak|delta air|united air|american air|southwest|jetblue|alaska air|spirit|frontier|airbnb|hotel|marriott|hilton|hyatt|holiday inn|sheraton|tesla supercharge|parking|toll|metro|transit|caltrain|bart)/i;
+const SHOPPING_MERCHANTS = /(amazon|walmart|target|costco|best buy|home depot|lowe|ikea|macy|nordstrom|kohl|tj maxx|marshalls|ross|sephora|ulta|nike|adidas|lululemon|gap |old navy|h&m|zara|uniqlo|shein|temu|etsy)/i;
+const HOUSING_MERCHANTS = /(rent|mortgage|hoa |property mgmt|landlord|leasing)/i;
+const BILLS_MERCHANTS = /(verizon|t.mobile|at&t|sprint|xfinity|comcast|spectrum|att fiber|google fiber|pg&e|coned|duke energy|insurance|aetna|cigna|kaiser|unitedhealth|blue cross|blue shield|geico|allstate|state farm|progressive|hospital|clinic|pharmacy|cvs|walgreens|rite aid)/i;
+const INVESTMENT_MERCHANTS = /(robinhood|fidelity|vanguard|schwab|coinbase|kraken|binance|wealthfront|betterment|m1 finance|public\.com)/i;
+
+export function mapToVelaCategory(plaidPrimary, _plaidSecondary, name, merchantName) {
+  const merchant = (merchantName || name || '').toLowerCase();
+
+  // Merchant-name overrides win when present — Plaid's category buckets are
+  // coarse and miss obvious things like "Starbucks → Food".
+  if (FOOD_MERCHANTS.test(merchant)) return 'Food & Dining';
+  if (SUBSCRIPTION_MERCHANTS.test(merchant)) return 'Subscriptions';
+  if (TRANSPORT_MERCHANTS.test(merchant)) return 'Transport';
+  if (HOUSING_MERCHANTS.test(merchant)) return 'Housing';
+  if (BILLS_MERCHANTS.test(merchant)) return 'Bills';
+  if (INVESTMENT_MERCHANTS.test(merchant)) return 'Investment';
+  if (SHOPPING_MERCHANTS.test(merchant)) return 'Shopping';
+
+  if (!plaidPrimary) return 'Other';
+  const p = plaidPrimary.toLowerCase();
+  if (p.includes('food') || p.includes('drink') || p.includes('restaurant')) return 'Food & Dining';
+  if (p.includes('travel') || p.includes('transport')) return 'Transport';
+  if (p.includes('shop') || p.includes('merchandise')) return 'Shopping';
+  if (p.includes('recreation') || p.includes('entertainment')) return 'Entertainment';
+  if (p.includes('rent') || p.includes('utilities') || p.includes('home_improvement')) return 'Housing';
+  if (p.includes('service') || p.includes('payment') || p.includes('fees') ||
+      p.includes('medical') || p.includes('healthcare') || p.includes('government')) return 'Bills';
+  if (p.includes('transfer') || p.includes('loan_payment')) return 'Investment';
+  if (p.includes('income') || p.includes('payroll')) return 'Income';
+  return 'Other';
+}
+
 export function isoDateOffset(days) {
   const d = new Date();
   d.setUTCDate(d.getUTCDate() + days);
@@ -101,6 +143,7 @@ export async function upsertTransactionsFromPlaid(supabase, userId, plaidTxns) {
       const accountId = accountIdMap[t.account_id];
       if (!accountId) return null;
       const [primary, secondary] = t.category || [];
+      const velaCategory = mapToVelaCategory(primary, secondary, t.name, t.merchant_name);
       return {
         user_id: userId,
         account_id: accountId,
@@ -108,8 +151,8 @@ export async function upsertTransactionsFromPlaid(supabase, userId, plaidTxns) {
         name: t.name,
         merchant_name: t.merchant_name,
         amount: t.amount,
-        category: primary || null,
-        subcategory: secondary || null,
+        category: velaCategory,
+        subcategory: secondary || primary || null,
         date: t.date,
         pending: Boolean(t.pending),
       };

@@ -11,7 +11,7 @@ function setupSteps({ goals, budgets, plaidConnected }) {
   ];
 }
 
-export default function HomePage({ data, session, onAddTxn, onEditAccount, onEditTxn, onGoTo }) {
+export default function HomePage({ data, session, onAddTxn, onOpenAccount, onEditTxn, onGoTo }) {
   const { profile, accounts, plaidItems = [], transactions, goals, budgets, derived, loading, error } = data;
   const itemsById = Object.fromEntries(plaidItems.map((it) => [it.id, it]));
   const firstName =
@@ -211,11 +211,11 @@ export default function HomePage({ data, session, onAddTxn, onEditAccount, onEdi
               <div
                 key={a.id}
                 className="am"
-                onClick={() => onEditAccount?.(a)}
+                onClick={() => onOpenAccount?.(a)}
                 role="button"
                 tabIndex={0}
                 style={{
-                  cursor: onEditAccount ? 'pointer' : 'default',
+                  cursor: onOpenAccount ? 'pointer' : 'default',
                   borderTop: accent ? `2px solid ${accent}` : undefined,
                 }}
               >
