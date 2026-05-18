@@ -1,4 +1,6 @@
 import { money, moneyAbs, emojiFor, relDate } from './format';
+import { colorFor } from './categoryColors';
+import SpendingBreakdown from './SpendingBreakdown';
 
 export default function BudgetPage({ data, onEditBudgets, onAddTxn, onEditTxn }) {
   const { transactions, budgets, derived, profile } = data;
@@ -60,6 +62,14 @@ export default function BudgetPage({ data, onEditBudgets, onAddTxn, onEditTxn })
       </div>
 
       <div className="card">
+        <div className="ctitle">Spending Breakdown</div>
+        <SpendingBreakdown
+          byCategory={derived.byCategory}
+          monthSpent={derived.monthSpent}
+        />
+      </div>
+
+      <div className="card">
         <div className="ctitle">
           <span>Spending vs. Budget</span>
           {budgets.length > 0 && (
@@ -94,10 +104,20 @@ export default function BudgetPage({ data, onEditBudgets, onAddTxn, onEditTxn })
               ? Math.min(100, (r.spent / r.limit) * 100)
               : 0;
             const over = r.limit > 0 && r.spent > r.limit;
+            const accent = colorFor(r.cat);
             return (
               <div key={r.cat} className="br">
                 <div className="br-top">
-                  <span className="br-cat">{r.cat}</span>
+                  <span className="br-cat" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <span style={{
+                      width: 8,
+                      height: 8,
+                      borderRadius: 2,
+                      background: accent,
+                      flexShrink: 0,
+                    }} />
+                    {r.cat}
+                  </span>
                   <span className={`br-nums ${over ? 'neg' : ''}`}>
                     {money(r.spent)} {r.limit > 0 ? `/ ${money(r.limit)}` : ''}
                   </span>
@@ -105,7 +125,10 @@ export default function BudgetPage({ data, onEditBudgets, onAddTxn, onEditTxn })
                 <div className="br-track">
                   <div
                     className={`br-fill ${over ? 'over' : ''}`}
-                    style={{ width: `${r.limit > 0 ? pct : 0}%` }}
+                    style={{
+                      width: `${r.limit > 0 ? pct : 0}%`,
+                      background: over ? undefined : accent,
+                    }}
                   />
                 </div>
               </div>
@@ -124,28 +147,36 @@ export default function BudgetPage({ data, onEditBudgets, onAddTxn, onEditTxn })
             Nothing logged yet this month.
           </div>
         ) : (
-          transactions.slice(0, 50).map((t) => (
-            <div
-              key={t.id}
-              className="txn"
-              onClick={() => onEditTxn?.(t)}
-              role="button"
-              tabIndex={0}
-              style={{ cursor: onEditTxn ? 'pointer' : 'default' }}
-            >
-              <div className="txn-em">{emojiFor(t.category, t.subcategory)}</div>
-              <div className="txn-bd">
-                <div className="txn-nm">{t.merchant_name || t.name}</div>
-                <div className="txn-ct">{t.category || 'Other'}</div>
-              </div>
-              <div className="txn-r">
-                <div className={`txn-amt ${t.amount < 0 ? 'pos' : ''}`}>
-                  {t.amount < 0 ? '+' : '−'}{moneyAbs(t.amount)}
+          transactions.slice(0, 50).map((t) => {
+            const cat = t.category || 'Other';
+            return (
+              <div
+                key={t.id}
+                className="txn"
+                onClick={() => onEditTxn?.(t)}
+                role="button"
+                tabIndex={0}
+                style={{ cursor: onEditTxn ? 'pointer' : 'default' }}
+              >
+                <div
+                  className="txn-em"
+                  style={{ boxShadow: `inset 0 0 0 1.5px ${colorFor(cat)}` }}
+                >
+                  {emojiFor(cat, t.subcategory)}
                 </div>
-                <div className="txn-dt">{relDate(t.date)}</div>
+                <div className="txn-bd">
+                  <div className="txn-nm">{t.merchant_name || t.name}</div>
+                  <div className="txn-ct" style={{ color: colorFor(cat) }}>{cat}</div>
+                </div>
+                <div className="txn-r">
+                  <div className={`txn-amt ${t.amount < 0 ? 'pos' : ''}`}>
+                    {t.amount < 0 ? '+' : '−'}{moneyAbs(t.amount)}
+                  </div>
+                  <div className="txn-dt">{relDate(t.date)}</div>
+                </div>
               </div>
-            </div>
-          ))
+            );
+          })
         )}
       </div>
     </>

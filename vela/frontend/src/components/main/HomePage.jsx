@@ -1,6 +1,7 @@
 import { money, moneyAbs, emojiFor, relDate, displayAccountName } from './format';
 import AnimatedNumber from './AnimatedNumber';
 import BankLogo from './BankLogo';
+import { colorFor } from './categoryColors';
 
 function setupSteps({ goals, budgets, plaidConnected }) {
   return [
@@ -234,28 +235,36 @@ export default function HomePage({ data, session, onAddTxn, onEditAccount, onEdi
             Nothing yet. Tap + to log income or an expense.
           </div>
         ) : (
-          recent.map((t) => (
-            <div
-              key={t.id}
-              className="txn"
-              onClick={() => onEditTxn?.(t)}
-              role="button"
-              tabIndex={0}
-              style={{ cursor: onEditTxn ? 'pointer' : 'default' }}
-            >
-              <div className="txn-em">{emojiFor(t.category, t.subcategory)}</div>
-              <div className="txn-bd">
-                <div className="txn-nm">{t.merchant_name || t.name}</div>
-                <div className="txn-ct">{t.category || 'Other'}</div>
-              </div>
-              <div className="txn-r">
-                <div className={`txn-amt ${t.amount < 0 ? 'pos' : ''}`}>
-                  {t.amount < 0 ? '+' : '−'}{moneyAbs(t.amount)}
+          recent.map((t) => {
+            const cat = t.category || 'Other';
+            return (
+              <div
+                key={t.id}
+                className="txn"
+                onClick={() => onEditTxn?.(t)}
+                role="button"
+                tabIndex={0}
+                style={{ cursor: onEditTxn ? 'pointer' : 'default' }}
+              >
+                <div
+                  className="txn-em"
+                  style={{ boxShadow: `inset 0 0 0 1.5px ${colorFor(cat)}` }}
+                >
+                  {emojiFor(cat, t.subcategory)}
                 </div>
-                <div className="txn-dt">{relDate(t.date)}</div>
+                <div className="txn-bd">
+                  <div className="txn-nm">{t.merchant_name || t.name}</div>
+                  <div className="txn-ct" style={{ color: colorFor(cat) }}>{cat}</div>
+                </div>
+                <div className="txn-r">
+                  <div className={`txn-amt ${t.amount < 0 ? 'pos' : ''}`}>
+                    {t.amount < 0 ? '+' : '−'}{moneyAbs(t.amount)}
+                  </div>
+                  <div className="txn-dt">{relDate(t.date)}</div>
+                </div>
               </div>
-            </div>
-          ))
+            );
+          })
         )}
       </div>
     </>
