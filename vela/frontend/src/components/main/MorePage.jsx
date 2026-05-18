@@ -12,7 +12,7 @@ const SETTINGS_KEYS = [
   { col: 'two_factor_enabled',    lbl: 'Two-Factor Auth',      sub: 'Extra protection on sign-in' },
 ];
 
-export default function MorePage({ data, session, onSignOut }) {
+export default function MorePage({ data, session, onSignOut, onOpenAccount }) {
   const { profile, accounts, plaidItems = [], loading, error } = data;
   const itemsById = Object.fromEntries(plaidItems.map((it) => [it.id, it]));
   const plaidConnectedCount = accounts.filter(
@@ -205,7 +205,14 @@ export default function MorePage({ data, session, onSignOut }) {
             const bal = Number(a.balance_current) || 0;
             const item = itemsById[a.plaid_item_id];
             return (
-              <div key={a.id} className="sr" style={{ alignItems: 'center', gap: 12 }}>
+              <div
+                key={a.id}
+                className="sr"
+                onClick={() => onOpenAccount?.(a)}
+                role="button"
+                tabIndex={0}
+                style={{ alignItems: 'center', gap: 12, cursor: onOpenAccount ? 'pointer' : 'default' }}
+              >
                 <BankLogo item={item} size={32} fallbackName={a.name} />
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div className="sr-l">{a.name}{a.mask ? ` ··${a.mask}` : ''}</div>
