@@ -1,10 +1,11 @@
-import { money, moneyAbs, emojiFor, relDate } from './format';
+import { money, moneyAbs, emojiFor, relDate, displayAccountName } from './format';
 import { colorFor } from './categoryColors';
 import SpendingDonut from './SpendingDonut';
 import WeeklyTrend from './WeeklyTrend';
 
 export default function BudgetPage({ data, onEditBudgets, onAddTxn, onEditTxn }) {
-  const { transactions, budgets, derived, profile } = data;
+  const { accounts, transactions, budgets, derived, profile } = data;
+  const accountsById = Object.fromEntries((accounts || []).map((a) => [a.id, a]));
   const today = new Date().toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
 
   // Build merged rows: every budget row + any spending category not in budgets.
@@ -155,6 +156,7 @@ export default function BudgetPage({ data, onEditBudgets, onAddTxn, onEditTxn })
         ) : (
           transactions.slice(0, 50).map((t) => {
             const cat = t.category || 'Other';
+            const acc = accountsById[t.account_id];
             return (
               <div
                 key={t.id}
@@ -172,7 +174,14 @@ export default function BudgetPage({ data, onEditBudgets, onAddTxn, onEditTxn })
                 </div>
                 <div className="txn-bd">
                   <div className="txn-nm">{t.merchant_name || t.name}</div>
-                  <div className="txn-ct" style={{ color: colorFor(cat) }}>{cat}</div>
+                  <div className="txn-ct">
+                    <span style={{ color: colorFor(cat) }}>{cat}</span>
+                    {acc && (
+                      <span style={{ color: 'var(--t3)' }}>
+                        {' · '}{displayAccountName(acc)}{acc.mask ? ` ··${acc.mask}` : ''}
+                      </span>
+                    )}
+                  </div>
                 </div>
                 <div className="txn-r">
                   <div className={`txn-amt ${t.amount < 0 ? 'pos' : ''}`}>

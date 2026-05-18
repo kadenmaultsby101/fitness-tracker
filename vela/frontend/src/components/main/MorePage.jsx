@@ -256,7 +256,17 @@ export default function MorePage({ data, session, onSignOut }) {
         </div>
         {BACKEND_AVAILABLE ? (
           <>
-            <PlaidLinkButton onConnected={() => data.refresh()} />
+            <PlaidLinkButton onConnected={() => {
+              data.refresh();
+              // Plaid items occasionally need a moment after exchange to fully
+              // expose accounts via accountsGet. Kick a second refresh + a
+              // forced sync after a short delay so the user doesn't have to
+              // manually pull-to-refresh.
+              setTimeout(() => {
+                data.refresh();
+                handleSync();
+              }, 5000);
+            }} />
             {accounts.length > 0 && (
               <button
                 type="button"
