@@ -4,6 +4,7 @@ import { API, BACKEND_AVAILABLE } from '../../lib/apiUrl';
 import { money } from './format';
 import PlaidLinkButton from '../PlaidLinkButton';
 import BankLogo from './BankLogo';
+import FeedbackCard from './FeedbackCard';
 
 const SETTINGS_KEYS = [
   { col: 'notify_transactions',   lbl: 'Transaction Alerts',   sub: 'Notify on every transaction' },
@@ -336,6 +337,8 @@ export default function MorePage({ data, session, onSignOut, onOpenAccount }) {
           </div>
         ))}
       </div>
+
+      <FeedbackCard session={session} />
 
       <div className="card" style={{ borderColor: 'rgba(235,159,159,0.25)' }}>
         <div className="ctitle" style={{ color: 'var(--red)' }}>Danger Zone</div>
