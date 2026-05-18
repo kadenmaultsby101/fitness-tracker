@@ -66,14 +66,15 @@ const BILLS_MERCHANTS = /(verizon|t.?mobile|at&t|sprint|xfinity|comcast|spectrum
 const INVESTMENT_MERCHANTS = /(robinhood|fidelity|vanguard|schwab|coinbase|kraken|binance|wealthfront|betterment|m1 finance|public\.com|^etrade|ameritrade|sofi invest|webull|^acorns\b)/i;
 const ENTERTAINMENT_MERCHANTS = /(amc theatre|regal cinema|cinemark|movie tavern|alamo drafthouse|stubhub|ticketmaster|^ax\b|eventbrite|^vivid seats|^seatgeek|fandango|^golf |bowling|paintball|escape room|arcade|^topgolf|six flags|disneyland|disney world|universal studios|^zoo |aquarium|museum|concert|festival|nightclub|venue|gymnastics|fitness|^gym\b|equinox|planet fitness|24 hour fitness|crunch fitness|orangetheory|soulcycle|^pilates|yoga studio|peloton)/i;
 
-// Plaid's newer `personal_finance_category` field — exhaustive list of
-// primaries from Plaid's taxonomy. Maps cleanly to Vela's buckets. We
-// PREFER this over the legacy `category` array when present (Plaid is
-// migrating to PFC and it's far more accurate).
+// Plaid's `personal_finance_category` primaries. Note: TRANSFER_IN /
+// TRANSFER_OUT default to Other because they're truly ambiguous (could
+// be ATM cash, paying a friend, paying off a card from another account,
+// moving money between own accounts, or actually investing). Investment
+// requires explicit confirmation (see below).
 const PFC_TO_VELA = {
   INCOME:                   'Income',
-  TRANSFER_IN:              'Investment', // overridden to Bills on credit accounts
-  TRANSFER_OUT:             'Investment',
+  TRANSFER_IN:              'Other',
+  TRANSFER_OUT:             'Other',
   LOAN_PAYMENTS:            'Bills',
   BANK_FEES:                'Bills',
   ENTERTAINMENT:            'Entertainment',
@@ -89,6 +90,14 @@ const PFC_TO_VELA = {
   RENT_AND_UTILITIES:       'Housing',
 };
 
+// ATM / raw cash transfers — never categorize as anything specific. We
+// can't tell what the cash was for. Routes to Other.
+const ATM_PATTERN = /(\batm\b|cash deposit|cash withdrawal|cash advance|^deposit$|^withdrawal$|teller|branch deposit)/i;
+// Explicit-investment signal: PFC detailed strings that confirm a real
+// buy/sell/contribution. Without one of these, broker merchant matches
+// fall through to Other to avoid mislabeling card payoffs.
+const INVESTMENT_PFC_DETAILED = /(BUY|SELL|DIVIDEND|CONTRIBUTION|^TRANSFER.*INVESTMENT|SECURITIES|RETIREMENT)/i;
+
 export function mapToVelaCategory(plaidPrimary, _plaidSecondary, name, merchantName, accountType, pfcPrimary, pfcDetailed) {
   const merchant = (merchantName || name || '').toLowerCase();
   const txnName = (name || '').toLowerCase();
@@ -97,6 +106,11 @@ export function mapToVelaCategory(plaidPrimary, _plaidSecondary, name, merchantN
   // never become Investment or Food.
   if (PAYMENT_PATTERN.test(merchant) || PAYMENT_PATTERN.test(txnName)) {
     return 'Bills';
+  }
+  // ATM / raw cash moves — always Other. We can't tell what the cash
+  // was for, so don't pretend.
+  if (ATM_PATTERN.test(merchant) || ATM_PATTERN.test(txnName)) {
+    return 'Other';
   }
 
   // Specific detailed PFC overrides for the rare cases where the primary
@@ -132,7 +146,15 @@ export function mapToVelaCategory(plaidPrimary, _plaidSecondary, name, merchantN
   if (HOUSING_MERCHANTS.test(merchant)) return 'Housing';
   if (BILLS_MERCHANTS.test(merchant)) return 'Bills';
   if (ENTERTAINMENT_MERCHANTS.test(merchant)) return 'Entertainment';
-  if (INVESTMENT_MERCHANTS.test(merchant)) return 'Investment';
+  // Broker merchant alone is AMBIGUOUS (could be investing, could be
+  // paying off a credit card linked to that broker, could be cash transfer).
+  // Only call it Investment when Plaid's detailed PFC confirms a real
+  // securities action.
+  if (INVESTMENT_MERCHANTS.test(merchant)) {
+    if (pfcDetailed && INVESTMENT_PFC_DETAILED.test(pfcDetailed)) return 'Investment';
+    // Without explicit confirmation, fall through to Other.
+    return 'Other';
+  }
   if (SHOPPING_MERCHANTS.test(merchant)) return 'Shopping';
 
   // Plaid's PFC primary — clean mapping table. Preferred over legacy.
@@ -157,7 +179,7 @@ export function mapToVelaCategory(plaidPrimary, _plaidSecondary, name, merchantN
     if (p.includes('rent') || p.includes('utilities') || p.includes('home_improvement')) return 'Housing';
     if (p.includes('service') || p.includes('payment') || p.includes('fees') ||
         p.includes('medical') || p.includes('healthcare') || p.includes('government')) return 'Bills';
-    if (p.includes('transfer')) return accountType === 'credit' ? 'Bills' : 'Investment';
+    if (p.includes('transfer')) return accountType === 'credit' ? 'Bills' : 'Other';
     if (p.includes('income') || p.includes('payroll')) return 'Income';
   }
 
