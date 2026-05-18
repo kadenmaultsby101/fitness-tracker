@@ -44,6 +44,18 @@ export function plaidErrorMessage(err) {
 // NOT investing, even if the destination is Robinhood/Fidelity (paying off
 // their credit card). This must run BEFORE the investment check.
 const PAYMENT_PATTERN = /(payment|^pmt$|\bpmt\b|autopay|thank you|epay)/i;
+// Peer-to-peer / wallet transfers — usually Bills (paying back a friend, rent
+// to a roommate, etc.) but we can't tell purpose, so categorize as Other only
+// if we can't infer better.
+const PEER_PAYMENT_PATTERN = /(\bvenmo\b|cash app|cashapp|\bzelle\b|paypal|wise|remitly|western union|^p2p\b)/i;
+// Catch-all keyword patterns that fire only when nothing else matched —
+// these handle generic merchant names that Plaid mislabels or leaves blank.
+const FOOD_KEYWORDS = /(restaurant|cafe|coffee|kitchen|grill|bistro|deli|bakery|pizzeria|bar & grill|pub|tavern|food|gastropub|izakaya|trattoria|cantina|taqueria|brasserie|burger|sushi|ramen|pho |dim sum|hibachi|teriyaki|noodle|donut|bagel|sandwich|salad|smoothie|juice|tea|boba|brewery|wine bar|cocktail|hookah)/i;
+const TRANSPORT_KEYWORDS = /(\bgas\b|fuel|petrol|airport|parking|park & |toll road|toll bridge|transit|metro|subway station|train|airline|airways|flights|car wash|auto repair|tire|mechanic|oil change|emissions|^dmv|tag office|garage)/i;
+const SHOPPING_KEYWORDS = /(market(?!place)|store|shop|outlet|boutique|emporium|mart\b|warehouse|outfitter|apparel|clothing|fashion|jewelers|jewelry|watches|electronics|hardware|garden|nursery|furniture|home goods|bookstore|stationery|toys|gift)/i;
+const HOUSING_KEYWORDS = /(apartments?|condominium|residence|management co|^apt |^apts |co.?op|townhom)/i;
+const ENTERTAINMENT_KEYWORDS = /(theatre|theater|cinema|movie|concert|festival|nightclub|venue|club\b|lounge|comedy|arcade|bowl|billiard|pool hall|escape|trivia|karaoke|paintball|laser tag|escape room|stadium|arena|amphitheater|park\b)/i;
+const BILLS_KEYWORDS = /(utility|electric|gas company|natural gas|water company|sewer|trash|cable|internet provider|wireless|cellular|phone bill|tuition|loan svc|servicing|credit union|^irs\b|^edd\b|^ftb\b|tax payment|hospital|medical center|urgent care|orthodont|dental|veterinarian|^dr\.? |clinic)/i;
 
 const SUBSCRIPTION_MERCHANTS = /(netflix|hulu|spotify|apple\.com\/bill|apple\.com\/itunes|youtube premium|youtube music|disney\+|disney plus|hbo|max\.com|paramount|peacock|prime video|chatgpt|openai|anthropic|claude|github|notion|figma|dropbox|icloud|google one|microsoft 365|adobe|canva|grammarly|nordvpn|expressvpn|onlyfans|patreon|substack|medium|audible|kindle unlimited|nytimes|wsj|the athletic)/i;
 const FOOD_MERCHANTS = /(starbucks|chipotle|chick-?fil-?a|mcdonald|wendy|burger king|taco bell|subway|domino|pizza hut|papa john|panera|sweetgreen|shake shack|cava|five guys|kfc|in.?n.?out|whataburger|dunkin|peet|blue bottle|krispy kreme|panda express|jersey mike|jimmy john|qdoba|raising cane|popeye|arby|wing stop|smashburger|jack in the box|hardee|carl.?s jr|sonic drive|dairy queen|baskin|cold stone|ben and jerry|einstein bagel|jamba|smoothie king|tropical smoothie|tst.? ?\*|trader joe|whole foods|safeway|kroger|publix|aldi|sprouts|wegmans|albertson|food lion|stop & shop|harris teeter|h-e-b|h.e.b|fresh market|natural grocers|grocery|supermarket|farmer.?s market|cafe|coffee|restaurant|grill|kitchen|deli|bistro|brewery|tavern|diner|eatery|bakery|sushi|ramen|noodle|thai |indian |chinese |mexican |vietnamese )/i;
@@ -124,9 +136,10 @@ export function mapToVelaCategory(plaidPrimary, _plaidSecondary, name, merchantN
   if (SHOPPING_MERCHANTS.test(merchant)) return 'Shopping';
 
   // Plaid's PFC primary — clean mapping table. Preferred over legacy.
-  if (pfcPrimary && PFC_TO_VELA[pfcPrimary]) {
+  // EXCEPTION: GENERAL_SERVICES is Plaid's own catch-all and routes too
+  // much to "Other-ish" — try keyword fallbacks first before accepting it.
+  if (pfcPrimary && PFC_TO_VELA[pfcPrimary] && pfcPrimary !== 'GENERAL_SERVICES') {
     let mapped = PFC_TO_VELA[pfcPrimary];
-    // TRANSFER on a credit account = payment-in = Bills, not Investment.
     if ((pfcPrimary === 'TRANSFER_IN' || pfcPrimary === 'TRANSFER_OUT') && accountType === 'credit') {
       mapped = 'Bills';
     }
@@ -134,18 +147,39 @@ export function mapToVelaCategory(plaidPrimary, _plaidSecondary, name, merchantN
   }
 
   // Legacy `category` fallback for older accounts/items.
-  if (!plaidPrimary) return 'Other';
-  const p = plaidPrimary.toLowerCase();
-  if (p.includes('credit_card') || p.includes('loan_payment')) return 'Bills';
-  if (p.includes('food') || p.includes('drink') || p.includes('restaurant')) return 'Food & Dining';
-  if (p.includes('travel') || p.includes('transport')) return 'Transport';
-  if (p.includes('shop') || p.includes('merchandise')) return 'Shopping';
-  if (p.includes('recreation') || p.includes('entertainment')) return 'Entertainment';
-  if (p.includes('rent') || p.includes('utilities') || p.includes('home_improvement')) return 'Housing';
-  if (p.includes('service') || p.includes('payment') || p.includes('fees') ||
-      p.includes('medical') || p.includes('healthcare') || p.includes('government')) return 'Bills';
-  if (p.includes('transfer')) return accountType === 'credit' ? 'Bills' : 'Investment';
-  if (p.includes('income') || p.includes('payroll')) return 'Income';
+  if (plaidPrimary) {
+    const p = plaidPrimary.toLowerCase();
+    if (p.includes('credit_card') || p.includes('loan_payment')) return 'Bills';
+    if (p.includes('food') || p.includes('drink') || p.includes('restaurant')) return 'Food & Dining';
+    if (p.includes('travel') || p.includes('transport')) return 'Transport';
+    if (p.includes('shop') || p.includes('merchandise')) return 'Shopping';
+    if (p.includes('recreation') || p.includes('entertainment')) return 'Entertainment';
+    if (p.includes('rent') || p.includes('utilities') || p.includes('home_improvement')) return 'Housing';
+    if (p.includes('service') || p.includes('payment') || p.includes('fees') ||
+        p.includes('medical') || p.includes('healthcare') || p.includes('government')) return 'Bills';
+    if (p.includes('transfer')) return accountType === 'credit' ? 'Bills' : 'Investment';
+    if (p.includes('income') || p.includes('payroll')) return 'Income';
+  }
+
+  // Keyword catch-alls — last resort before "Other". These are generic
+  // English patterns that catch local merchants Plaid doesn't recognize
+  // (a small cafe with no chain, a regional gas station, etc.).
+  if (FOOD_KEYWORDS.test(merchant) || FOOD_KEYWORDS.test(txnName)) return 'Food & Dining';
+  if (TRANSPORT_KEYWORDS.test(merchant) || TRANSPORT_KEYWORDS.test(txnName)) return 'Transport';
+  if (BILLS_KEYWORDS.test(merchant) || BILLS_KEYWORDS.test(txnName)) return 'Bills';
+  if (HOUSING_KEYWORDS.test(merchant) || HOUSING_KEYWORDS.test(txnName)) return 'Housing';
+  if (ENTERTAINMENT_KEYWORDS.test(merchant) || ENTERTAINMENT_KEYWORDS.test(txnName)) return 'Entertainment';
+  if (SHOPPING_KEYWORDS.test(merchant) || SHOPPING_KEYWORDS.test(txnName)) return 'Shopping';
+
+  // Peer payments — we genuinely don't know purpose. Bills is the most
+  // common reason (rent split, paying friends back).
+  if (PEER_PAYMENT_PATTERN.test(merchant) || PEER_PAYMENT_PATTERN.test(txnName)) return 'Bills';
+
+  // Last resort. Log it so we can see what's still falling through and
+  // patch the regex next round.
+  console.info('[plaid] uncategorized → Other:', {
+    name, merchantName, plaidPrimary, pfcPrimary, pfcDetailed,
+  });
   return 'Other';
 }
 
