@@ -309,6 +309,11 @@ export async function upsertTransactionsFromPlaid(supabase, userId, plaidTxns) {
         ? pfcDetailed.replace(/^[A-Z_]+_/, '').replace(/_/g, ' ').toLowerCase()
         : null) || primary || null;
 
+      // Plaid's enriched merchant logo (same source Monarch/Origin use).
+      // Prefer the top-level logo_url, then a counterparty's logo.
+      const logoUrl = t.logo_url || t.counterparties?.[0]?.logo_url || null;
+      const website = t.website || t.counterparties?.[0]?.website || null;
+
       return {
         user_id: userId,
         account_id: accountId,
@@ -320,6 +325,8 @@ export async function upsertTransactionsFromPlaid(supabase, userId, plaidTxns) {
         subcategory: subForDisplay,
         date: t.date,
         pending: Boolean(t.pending),
+        logo_url: logoUrl,
+        merchant_website: website,
       };
     })
     .filter(Boolean);

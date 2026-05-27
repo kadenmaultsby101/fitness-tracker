@@ -93,7 +93,7 @@ export function useFinancialData() {
             .eq('user_id', userId),
           supabase
             .from('transactions')
-            .select('id, account_id, plaid_transaction_id, name, merchant_name, amount, category, subcategory, date, pending')
+            .select('id, account_id, plaid_transaction_id, name, merchant_name, amount, category, subcategory, date, pending, logo_url, merchant_website')
             .eq('user_id', userId)
             .order('date', { ascending: false })
             .limit(200),
