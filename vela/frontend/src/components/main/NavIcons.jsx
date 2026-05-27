@@ -34,10 +34,16 @@ export function MoreIcon() {
     <svg {...base}><circle cx="5" cy="12" r="1.4" /><circle cx="12" cy="12" r="1.4" /><circle cx="19" cy="12" r="1.4" /></svg>
   );
 }
+export function InsightsIcon() {
+  return (
+    <svg {...base}><path d="M21 12a9 9 0 1 1-9-9v9Z" /><path d="M14 3.5a9 9 0 0 1 6.5 6.5H14Z" /></svg>
+  );
+}
 
 export const NAV_ICON = {
   home: HomeIcon,
   budget: BudgetIcon,
+  insights: InsightsIcon,
   goals: GoalsIcon,
   coach: SageIcon,
   more: MoreIcon,
