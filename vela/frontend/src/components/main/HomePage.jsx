@@ -2,6 +2,7 @@ import { money, moneyAbs, emojiFor, relDate, displayAccountName } from './format
 import AnimatedNumber from './AnimatedNumber';
 import BankLogo from './BankLogo';
 import TxnIcon from './TxnIcon';
+import AllocationBar from './AllocationBar';
 import { colorFor } from './categoryColors';
 import { groupAccounts } from './accountGroups';
 
@@ -87,6 +88,7 @@ export default function HomePage({ data, session, onAddTxn, onOpenAccount, onEdi
             {derived.monthRemaining >= 0 ? '↑' : '↓'} {money(Math.abs(derived.monthRemaining))} cash flow this month
           </div>
         ) : null}
+        {hasAccounts && <AllocationBar accounts={accounts} />}
         <div className="nw-row">
           <span className="nw-pct">
             {accounts.length} {accounts.length === 1 ? 'account' : 'accounts'}

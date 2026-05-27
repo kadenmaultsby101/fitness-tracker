@@ -12,14 +12,15 @@ import AddTransactionModal from './AddTransactionModal';
 import AddAccountModal from './AddAccountModal';
 import GoalModal from './GoalModal';
 import BudgetModal from './BudgetModal';
+import { NAV_ICON } from './NavIcons';
 import '../../styles/app.css';
 
 const NAV = [
-  { id: 'home',   ic: '◈', lbl: 'Home' },
-  { id: 'budget', ic: '◎', lbl: 'Budget' },
-  { id: 'goals',  ic: '◇', lbl: 'Goals' },
-  { id: 'coach',  ic: '✦', lbl: 'Sage' },
-  { id: 'more',   ic: '⊙', lbl: 'More' },
+  { id: 'home',   lbl: 'Home' },
+  { id: 'budget', lbl: 'Budget' },
+  { id: 'goals',  lbl: 'Goals' },
+  { id: 'coach',  lbl: 'Sage' },
+  { id: 'more',   lbl: 'More' },
 ];
 
 export default function MainApp({ session }) {
@@ -171,17 +172,21 @@ export default function MainApp({ session }) {
       </div>
 
       <nav className="bnav" role="navigation">
-        {NAV.map((n) => (
-          <button
-            key={n.id}
-            type="button"
-            className={`bn ${page === n.id ? 'on' : ''}`}
-            onClick={() => setPage(n.id)}
-          >
-            <span className="bn-ic">{n.ic}</span>
-            <span className="bn-lbl">{n.lbl}</span>
-          </button>
-        ))}
+        {NAV.map((n) => {
+          const Icon = NAV_ICON[n.id];
+          const active = page === n.id || (n.id === 'home' && page === 'account');
+          return (
+            <button
+              key={n.id}
+              type="button"
+              className={`bn ${active ? 'on' : ''}`}
+              onClick={() => setPage(n.id)}
+            >
+              <span className="bn-ic">{Icon ? <Icon /> : null}</span>
+              <span className="bn-lbl">{n.lbl}</span>
+            </button>
+          );
+        })}
       </nav>
 
       {modal === 'txn' && (
