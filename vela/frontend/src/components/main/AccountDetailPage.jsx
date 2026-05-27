@@ -1,13 +1,19 @@
-import { useMemo } from 'react';
-import { money, moneyAbs, emojiFor, relDate, displayAccountName } from './format';
+import { useMemo, useState } from 'react';
+import { supabase } from '../../lib/supabase';
+import { API } from '../../lib/apiUrl';
+import { money, moneyAbs, relDate, displayAccountName } from './format';
 import { colorFor } from './categoryColors';
 import BankLogo from './BankLogo';
+import TxnIcon from './TxnIcon';
 
 // Detail view for a single account: header (logo, name, balance) +
 // every transaction we have for that account, oldest-first reversed.
 // Hit from the Home accounts strip or More Connected Accounts list.
 export default function AccountDetailPage({ data, accountId, onBack, onEditAccount, onEditTxn }) {
   const { accounts, plaidItems = [], transactions } = data;
+  const [disconnecting, setDisconnecting] = useState(false);
+  const [confirmDisconnect, setConfirmDisconnect] = useState(false);
+  const [disconnectError, setDisconnectError] = useState('');
 
   const account = accounts.find((a) => a.id === accountId);
   const itemsById = useMemo(
@@ -68,6 +74,31 @@ export default function AccountDetailPage({ data, accountId, onBack, onEditAccou
     if (amt > 0) monthSpent += amt;
     else monthIn += Math.abs(amt);
   }
+
+  const isManual = String(account.plaid_account_id || '').startsWith('manual_');
+  const sameInstitutionCount = accounts.filter((a) => a.plaid_item_id === account.plaid_item_id).length;
+
+  const disconnect = async () => {
+    setDisconnecting(true);
+    setDisconnectError('');
+    try {
+      const { data: sess } = await supabase.auth.getSession();
+      const token = sess.session?.access_token;
+      if (!token) throw new Error('Not signed in.');
+      const res = await fetch(`${API}/api/plaid/remove-item`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ item_id: account.plaid_item_id }),
+      });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(body.error || `HTTP ${res.status}`);
+      data.refresh();
+      onBack();
+    } catch (err) {
+      setDisconnectError(err?.message || 'Could not disconnect. Try again.');
+      setDisconnecting(false);
+    }
+  };
 
   return (
     <>
@@ -130,6 +161,44 @@ export default function AccountDetailPage({ data, accountId, onBack, onEditAccou
         </button>
       </div>
 
+      {!isManual && (
+        <div style={{ padding: '0 14px 8px' }}>
+          {disconnectError && <div className="merr" style={{ marginBottom: 10 }}>{disconnectError}</div>}
+          {!confirmDisconnect ? (
+            <button
+              type="button"
+              className="bsec"
+              style={{ width: '100%', color: 'var(--red)', borderColor: 'rgba(235,159,159,0.30)' }}
+              onClick={() => setConfirmDisconnect(true)}
+            >
+              Disconnect this bank
+            </button>
+          ) : (
+            <div className="card" style={{ margin: 0, borderColor: 'rgba(235,159,159,0.30)' }}>
+              <div style={{ fontSize: 11, color: 'var(--t2)', lineHeight: 1.6, marginBottom: 12 }}>
+                Disconnect <strong style={{ color: 'var(--t1)' }}>{item?.institution_name || displayAccountName(account)}</strong>?
+                {sameInstitutionCount > 1 && <> This removes all <strong>{sameInstitutionCount}</strong> accounts from this bank.</>}
+                {' '}Their transactions leave Vela. You can reconnect anytime.
+              </div>
+              <div className="mbtns">
+                <button type="button" className="bsec" onClick={() => setConfirmDisconnect(false)} disabled={disconnecting}>
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  className="bdel"
+                  style={{ flex: 1, marginTop: 0 }}
+                  onClick={disconnect}
+                  disabled={disconnecting}
+                >
+                  {disconnecting ? 'Disconnecting…' : 'Disconnect'}
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
       <div className="card">
         <div className="ctitle">
           All Transactions ({txns.length})
@@ -150,12 +219,7 @@ export default function AccountDetailPage({ data, accountId, onBack, onEditAccou
                 tabIndex={0}
                 style={{ cursor: onEditTxn ? 'pointer' : 'default' }}
               >
-                <div
-                  className="txn-em"
-                  style={{ boxShadow: `inset 0 0 0 1.5px ${colorFor(cat)}` }}
-                >
-                  {emojiFor(cat, t.subcategory)}
-                </div>
+                <TxnIcon txn={t} />
                 <div className="txn-bd">
                   <div className="txn-nm">{t.merchant_name || t.name}</div>
                   <div className="txn-ct" style={{ color: colorFor(cat) }}>{cat}</div>

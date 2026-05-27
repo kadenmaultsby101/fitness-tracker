@@ -1,7 +1,8 @@
-import { money, moneyAbs, emojiFor, relDate, displayAccountName } from './format';
+import { money, moneyAbs, relDate, displayAccountName } from './format';
 import { colorFor } from './categoryColors';
 import SpendingDonut from './SpendingDonut';
 import WeeklyTrend from './WeeklyTrend';
+import TxnIcon from './TxnIcon';
 
 export default function BudgetPage({ data, onEditBudgets, onAddTxn, onEditTxn }) {
   const { accounts, transactions, budgets, derived, profile } = data;
@@ -166,12 +167,7 @@ export default function BudgetPage({ data, onEditBudgets, onAddTxn, onEditTxn })
                 tabIndex={0}
                 style={{ cursor: onEditTxn ? 'pointer' : 'default' }}
               >
-                <div
-                  className="txn-em"
-                  style={{ boxShadow: `inset 0 0 0 1.5px ${colorFor(cat)}` }}
-                >
-                  {emojiFor(cat, t.subcategory)}
-                </div>
+                <TxnIcon txn={t} />
                 <div className="txn-bd">
                   <div className="txn-nm">{t.merchant_name || t.name}</div>
                   <div className="txn-ct">
