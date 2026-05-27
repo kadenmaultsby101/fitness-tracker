@@ -2,12 +2,14 @@ import { useEffect, useRef, useState } from 'react';
 import { supabase } from '../../lib/supabase';
 import { API, BACKEND_AVAILABLE } from '../../lib/apiUrl';
 import { useFinancialData } from '../../hooks/useFinancialData';
+import { usePullToRefresh } from '../../hooks/usePullToRefresh';
 import HomePage from './HomePage';
 import BudgetPage from './BudgetPage';
 import GoalsPage from './GoalsPage';
 import SagePage from './SagePage';
 import MorePage from './MorePage';
 import AccountDetailPage from './AccountDetailPage';
+import TransactionsView from './TransactionsView';
 import AddTransactionModal from './AddTransactionModal';
 import AddAccountModal from './AddAccountModal';
 import GoalModal from './GoalModal';
@@ -26,12 +28,21 @@ const NAV = [
 export default function MainApp({ session }) {
   const [page, setPage] = useState('home');
   const [selectedAccountId, setSelectedAccountId] = useState(null);
+  const [txnFilter, setTxnFilter] = useState(null); // { kind: 'category'|'merchant', value }
   const [modal, setModal] = useState(null); // 'txn' | { kind: 'editAccount', account } | { kind: 'editTxn', txn } | { kind: 'goal', goal? } | 'budget'
   const data = useFinancialData();
 
   const openAccount = (a) => {
     setSelectedAccountId(a.id);
     setPage('account');
+  };
+  const openCategory = (value) => {
+    setTxnFilter({ kind: 'category', value });
+    setPage('txnview');
+  };
+  const openMerchant = (value) => {
+    setTxnFilter({ kind: 'merchant', value });
+    setPage('txnview');
   };
 
   const closeModal = () => setModal(null);
@@ -130,6 +141,7 @@ export default function MainApp({ session }) {
         onEditBudgets={() => setModal('budget')}
         onAddTxn={() => setModal('txn')}
         onEditTxn={(t) => setModal({ kind: 'editTxn', txn: t })}
+        onOpenCategory={openCategory}
       />
     );
   } else if (page === 'goals') {
@@ -161,12 +173,55 @@ export default function MainApp({ session }) {
         onEditTxn={(t) => setModal({ kind: 'editTxn', txn: t })}
       />
     );
+  } else if (page === 'txnview') {
+    activePage = (
+      <TransactionsView
+        data={data}
+        filter={txnFilter}
+        onBack={() => { setTxnFilter(null); setPage('home'); }}
+        onOpenMerchant={openMerchant}
+        onEditTxn={(t) => setModal({ kind: 'editTxn', txn: t })}
+      />
+    );
   }
+
+  const pageRef = useRef(null);
+  const { pull, refreshing } = usePullToRefresh(
+    pageRef,
+    async () => {
+      lastSyncRef.current = 0; // bypass the 60s debounce for an explicit pull
+      await runBackgroundSync();
+      data.refresh();
+    },
+    { resetKey: page }
+  );
 
   return (
     <div className="app">
       <div className="pages">
-        <div className={`page on ${page === 'coach' ? 'coach-page' : ''}`} key={page}>
+        {(pull > 0 || refreshing) && (
+          <div style={{
+            position: 'absolute',
+            top: 0, left: 0, right: 0,
+            height: pull,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            fontSize: 10,
+            letterSpacing: 1,
+            color: 'var(--t2)',
+            zIndex: 6,
+            pointerEvents: 'none',
+          }}>
+            {refreshing ? 'Syncing…' : pull >= 70 ? 'Release to sync' : 'Pull to sync'}
+          </div>
+        )}
+        <div
+          ref={pageRef}
+          className={`page on ${page === 'coach' ? 'coach-page' : ''}`}
+          key={page}
+          style={{ transform: pull > 0 ? `translateY(${pull}px)` : undefined }}
+        >
           {activePage}
         </div>
       </div>
