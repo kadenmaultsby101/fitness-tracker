@@ -1,24 +1,30 @@
-@import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@300;400;600&family=DM+Mono:wght@300;400;500&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@300;400;500;600;700&family=Inter:wght@400;500;600;700&family=DM+Mono:wght@400;500&display=swap');
 
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
 :root {
-  --bg: #070707;
-  --c1: #0e0e0e;
-  --c2: #161616;
-  --c3: #1f1f1f;
-  --c4: #282828;
-  --b1: rgba(255,255,255,0.06);
-  --b2: rgba(255,255,255,0.12);
-  --b3: rgba(255,255,255,0.20);
-  --t1: #f0f0f0;
-  --t2: #888;
-  --t3: #444;
-  --green: #9febb8;
-  --red: #eb9f9f;
-  --gold: #ebd49f;
+  --bg: #0a0a0c;
+  --c1: #141417;   /* card fill */
+  --c2: #1b1b20;   /* elevated card / input */
+  --c3: #26262c;   /* track / skeleton */
+  --c4: #303038;
+  --b1: rgba(255,255,255,0.05);
+  --b2: rgba(255,255,255,0.10);
+  --b3: rgba(255,255,255,0.18);
+  --t1: #f4f4f5;
+  --t2: #9a9aa3;
+  --t3: #5c5c66;
+  --green: #5fd39a;
+  --red: #f0807f;
+  --gold: #e3b34a;
+  --accent: #8b93ff;        /* soft periwinkle */
+  --accent-soft: rgba(139,147,255,0.14);
   --serif: 'Cormorant Garamond', serif;
+  --sans: 'Inter', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
   --mono: 'DM Mono', monospace;
+  --radius: 16px;
+  --radius-sm: 12px;
+  --shadow: 0 1px 2px rgba(0,0,0,0.4), 0 8px 28px rgba(0,0,0,0.22);
 }
 
 html, body, #root {
@@ -29,14 +35,18 @@ html, body, #root {
 }
 
 body {
-  font-family: var(--mono);
+  font-family: var(--sans);
   color: var(--t1);
   -webkit-font-smoothing: antialiased;
   -webkit-tap-highlight-color: transparent;
   overscroll-behavior: none;
+  letter-spacing: -0.01em;
 }
 
 ::-webkit-scrollbar { width: 0; }
 
-button { font-family: var(--mono); }
-input, textarea { font-family: var(--mono); }
+button { font-family: var(--sans); }
+input, textarea { font-family: var(--sans); }
+
+/* Tabular numbers everywhere money is shown keeps columns aligned. */
+.num, .nw-amt, .am-bal, .txn-amt { font-variant-numeric: tabular-nums; }
