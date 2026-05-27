@@ -5,6 +5,7 @@ import { money } from './format';
 import PlaidLinkButton from '../PlaidLinkButton';
 import BankLogo from './BankLogo';
 import FeedbackCard from './FeedbackCard';
+import { groupAccounts } from './accountGroups';
 
 const SETTINGS_KEYS = [
   { col: 'notify_transactions',   lbl: 'Transaction Alerts',   sub: 'Notify on every transaction' },
@@ -12,40 +13,6 @@ const SETTINGS_KEYS = [
   { col: 'notify_ai_insights',    lbl: 'AI Insights',          sub: 'Push when Sage spots something' },
   { col: 'two_factor_enabled',    lbl: 'Two-Factor Auth',      sub: 'Extra protection on sign-in' },
 ];
-
-// Bucket an account into a display group based on Plaid type/subtype.
-function accountGroup(a) {
-  const type = (a.type || '').toLowerCase();
-  const sub = (a.subtype || '').toLowerCase();
-  if (type === 'credit') return 'Credit Cards';
-  if (type === 'loan') return 'Loans';
-  if (type === 'investment' || type === 'brokerage') return 'Investments';
-  if (sub === 'savings') return 'Savings';
-  if (sub === 'cash' || String(a.plaid_account_id || '').includes('_cash_')) return 'Cash';
-  if (type === 'depository') return 'Checking';
-  return 'Other';
-}
-
-// Ordered group list for stable section ordering.
-const GROUP_ORDER = ['Checking', 'Savings', 'Cash', 'Credit Cards', 'Loans', 'Investments', 'Other'];
-
-function groupAccounts(accounts) {
-  const groups = {};
-  for (const a of accounts) {
-    const g = accountGroup(a);
-    (groups[g] ||= []).push(a);
-  }
-  return GROUP_ORDER
-    .filter((g) => groups[g]?.length)
-    .map((g) => {
-      const isDebt = g === 'Credit Cards' || g === 'Loans';
-      const subtotal = groups[g].reduce((s, a) => {
-        const bal = Number(a.balance_current) || 0;
-        return s + (isDebt ? -bal : bal);
-      }, 0);
-      return { group: g, accounts: groups[g], subtotal, isDebt };
-    });
-}
 
 export default function MorePage({ data, session, onSignOut, onOpenAccount }) {
   const { profile, accounts, plaidItems = [], loading, error } = data;
