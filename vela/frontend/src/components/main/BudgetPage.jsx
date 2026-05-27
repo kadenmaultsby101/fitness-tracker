@@ -1,20 +1,23 @@
+import { useState } from 'react';
 import { money, moneyAbs, relDate, displayAccountName } from './format';
 import { colorFor } from './categoryColors';
+import { deriveForMonth } from '../../hooks/useFinancialData';
 import SpendingDonut from './SpendingDonut';
 import WeeklyTrend from './WeeklyTrend';
 import TxnIcon from './TxnIcon';
+import MonthSwitcher from './MonthSwitcher';
 
 export default function BudgetPage({ data, onEditBudgets, onAddTxn, onEditTxn, onOpenCategory }) {
-  const { accounts, transactions, budgets, derived, profile } = data;
+  const { accounts, transactions, budgets, profile } = data;
   const accountsById = Object.fromEntries((accounts || []).map((a) => [a.id, a]));
-  const today = new Date().toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+
+  const [offset, setOffset] = useState(0);
+  const view = deriveForMonth(accounts, transactions, offset);
+  // Transactions within the viewed month, for the list + weekly trend.
+  const monthTxns = transactions.filter((t) => t.date >= view.start && t.date < view.end);
 
   // Build merged rows: every budget row + any spending category not in budgets.
-  const spendingCategories = new Set(
-    transactions
-      .filter((t) => Number(t.amount) > 0)
-      .map((t) => t.category || 'Other')
-  );
+  const spendingCategories = new Set(Object.keys(view.byCategory));
   const budgetMap = Object.fromEntries(budgets.map((b) => [b.category, b]));
   const allCategories = Array.from(
     new Set([...budgets.map((b) => b.category), ...spendingCategories])
@@ -22,60 +25,64 @@ export default function BudgetPage({ data, onEditBudgets, onAddTxn, onEditTxn, o
 
   const rows = allCategories.map((cat) => {
     const limit = Number(budgetMap[cat]?.monthly_limit) || 0;
-    const spent = Math.round(Number(derived.byCategory[cat] || 0) * 100) / 100;
+    const spent = Math.round(Number(view.byCategory[cat] || 0) * 100) / 100;
     return { cat, limit, spent };
   }).sort((a, b) => (b.limit + b.spent) - (a.limit + a.spent));
 
-  const totalIncome = derived.monthIncome || profile?.monthly_income || 0;
+  const totalIncome = view.monthIncome || (offset === 0 ? profile?.monthly_income : 0) || 0;
 
   return (
     <>
       <header className="ph">
         <div className="ph-l">
           <div className="ph-t">Budget</div>
-          <div className="ph-s">{today}</div>
+          <div className="ph-s">Spending & budgets by month</div>
         </div>
         <button type="button" className="ph-action" onClick={onAddTxn} aria-label="Add transaction">+</button>
       </header>
 
       <div className="card">
-        <div className="ctitle">Monthly Summary</div>
+        <MonthSwitcher offset={offset} setOffset={setOffset} label={view.label} />
+      </div>
+
+      <div className="card">
+        <div className="ctitle">Summary · {view.label}</div>
         <div className="bsum">
           <span className="bsl">Income</span>
           <span className="bsv pos">{money(totalIncome)}</span>
         </div>
         <div className="bsum">
           <span className="bsl">Spent</span>
-          <span className="bsv">{money(derived.monthSpent)}</span>
+          <span className="bsv">{money(view.monthSpent)}</span>
         </div>
         <div className="bsum">
           <span className="bsl">Invested</span>
-          <span className="bsv gold">{money(derived.monthInvested)}</span>
+          <span className="bsv gold">{money(view.monthInvested)}</span>
         </div>
         <div className="bsum">
           <span className="bsl">Remaining</span>
-          <span className={`bsv ${derived.monthRemaining < 0 ? 'neg' : 'pos'}`}>
-            {money(derived.monthRemaining)}
+          <span className={`bsv ${view.monthRemaining < 0 ? 'neg' : 'pos'}`}>
+            {money(view.monthRemaining)}
           </span>
         </div>
         <div className="bsum">
           <span className="bsl">Savings Rate</span>
-          <span className="bsv">{derived.savingsRate}%</span>
+          <span className="bsv">{view.savingsRate}%</span>
         </div>
       </div>
 
       <div className="card">
         <div className="ctitle">Spending by Category</div>
         <SpendingDonut
-          byCategory={derived.byCategory}
-          monthSpent={derived.monthSpent}
+          byCategory={view.byCategory}
+          monthSpent={view.monthSpent}
           onSelectCategory={onOpenCategory}
         />
       </div>
 
       <div className="card">
         <div className="ctitle">Weekly Spending</div>
-        <WeeklyTrend transactions={transactions} />
+        <WeeklyTrend transactions={offset === 0 ? transactions : monthTxns} />
       </div>
 
       <div className="card">
@@ -158,12 +165,12 @@ export default function BudgetPage({ data, onEditBudgets, onAddTxn, onEditTxn, o
           <span>All Transactions</span>
           <button type="button" className="ctitle-act" onClick={onAddTxn}>+ Add</button>
         </div>
-        {transactions.length === 0 ? (
+        {monthTxns.length === 0 ? (
           <div style={{ fontSize: 11, color: 'var(--t3)', lineHeight: 1.7 }}>
-            Nothing logged yet this month.
+            Nothing logged in {view.label}.
           </div>
         ) : (
-          transactions.slice(0, 50).map((t) => {
+          monthTxns.slice(0, 80).map((t) => {
             const cat = t.category || 'Other';
             const acc = accountsById[t.account_id];
             return (

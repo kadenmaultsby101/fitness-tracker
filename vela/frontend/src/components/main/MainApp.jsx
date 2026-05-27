@@ -8,6 +8,7 @@ import BudgetPage from './BudgetPage';
 import GoalsPage from './GoalsPage';
 import SagePage from './SagePage';
 import MorePage from './MorePage';
+import InsightsPage from './InsightsPage';
 import AccountDetailPage from './AccountDetailPage';
 import TransactionsView from './TransactionsView';
 import AddTransactionModal from './AddTransactionModal';
@@ -18,11 +19,12 @@ import { NAV_ICON } from './NavIcons';
 import '../../styles/app.css';
 
 const NAV = [
-  { id: 'home',   lbl: 'Home' },
-  { id: 'budget', lbl: 'Budget' },
-  { id: 'goals',  lbl: 'Goals' },
-  { id: 'coach',  lbl: 'Sage' },
-  { id: 'more',   lbl: 'More' },
+  { id: 'home',     lbl: 'Home' },
+  { id: 'budget',   lbl: 'Budget' },
+  { id: 'insights', lbl: 'Insights' },
+  { id: 'goals',    lbl: 'Goals' },
+  { id: 'coach',    lbl: 'Sage' },
+  { id: 'more',     lbl: 'More' },
 ];
 
 export default function MainApp({ session }) {
@@ -150,6 +152,14 @@ export default function MainApp({ session }) {
         data={data}
         onAddGoal={() => setModal({ kind: 'goal' })}
         onEditGoal={(g) => setModal({ kind: 'goal', goal: g })}
+      />
+    );
+  } else if (page === 'insights') {
+    activePage = (
+      <InsightsPage
+        data={data}
+        onOpenCategory={openCategory}
+        onOpenMerchant={openMerchant}
       />
     );
   } else if (page === 'coach') {
