@@ -13,9 +13,47 @@ const SETTINGS_KEYS = [
   { col: 'two_factor_enabled',    lbl: 'Two-Factor Auth',      sub: 'Extra protection on sign-in' },
 ];
 
+// Bucket an account into a display group based on Plaid type/subtype.
+function accountGroup(a) {
+  const type = (a.type || '').toLowerCase();
+  const sub = (a.subtype || '').toLowerCase();
+  if (type === 'credit') return 'Credit Cards';
+  if (type === 'loan') return 'Loans';
+  if (type === 'investment' || type === 'brokerage') return 'Investments';
+  if (sub === 'savings') return 'Savings';
+  if (sub === 'cash' || String(a.plaid_account_id || '').includes('_cash_')) return 'Cash';
+  if (type === 'depository') return 'Checking';
+  return 'Other';
+}
+
+// Ordered group list for stable section ordering.
+const GROUP_ORDER = ['Checking', 'Savings', 'Cash', 'Credit Cards', 'Loans', 'Investments', 'Other'];
+
+function groupAccounts(accounts) {
+  const groups = {};
+  for (const a of accounts) {
+    const g = accountGroup(a);
+    (groups[g] ||= []).push(a);
+  }
+  return GROUP_ORDER
+    .filter((g) => groups[g]?.length)
+    .map((g) => {
+      const isDebt = g === 'Credit Cards' || g === 'Loans';
+      const subtotal = groups[g].reduce((s, a) => {
+        const bal = Number(a.balance_current) || 0;
+        return s + (isDebt ? -bal : bal);
+      }, 0);
+      return { group: g, accounts: groups[g], subtotal, isDebt };
+    });
+}
+
 export default function MorePage({ data, session, onSignOut, onOpenAccount }) {
   const { profile, accounts, plaidItems = [], loading, error } = data;
   const itemsById = Object.fromEntries(plaidItems.map((it) => [it.id, it]));
+  // 'grouped' = all groups on one page with section headers.
+  // 'tabs' = one group at a time, switchable via chips.
+  const [acctView, setAcctView] = useState('grouped');
+  const [activeGroup, setActiveGroup] = useState(null);
   const plaidConnectedCount = accounts.filter(
     (a) => !String(a.plaid_account_id || '').startsWith('manual_')
   ).length;
@@ -200,8 +238,9 @@ export default function MorePage({ data, session, onSignOut, onOpenAccount }) {
           <div style={{ fontSize: 11, color: 'var(--t3)', lineHeight: 1.7, padding: '4px 0' }}>
             No banks connected yet — use the button below.
           </div>
-        ) : (
-          accounts.map((a) => {
+        ) : (() => {
+          const grouped = groupAccounts(accounts);
+          const renderRow = (a) => {
             const isDebt = a.type === 'credit' || a.type === 'loan';
             const bal = Number(a.balance_current) || 0;
             const item = itemsById[a.plaid_item_id];
@@ -219,20 +258,73 @@ export default function MorePage({ data, session, onSignOut, onOpenAccount }) {
                   <div className="sr-l">{a.name}{a.mask ? ` ··${a.mask}` : ''}</div>
                   <div className="sr-s">{item?.institution_name || a.subtype || a.type}</div>
                 </div>
-                <div
-                  style={{
-                    fontFamily: 'var(--serif)',
-                    fontSize: 16,
-                    fontWeight: 300,
-                    color: isDebt ? 'var(--red)' : undefined,
-                  }}
-                >
+                <div style={{
+                  fontFamily: 'var(--serif)', fontSize: 16, fontWeight: 300,
+                  color: isDebt ? 'var(--red)' : undefined,
+                }}>
                   {isDebt ? '−' : ''}{money(bal)}
                 </div>
               </div>
             );
-          })
-        )}
+          };
+
+          const sectionHeader = (g, subtotal, isDebt) => (
+            <div style={{
+              display: 'flex', justifyContent: 'space-between', alignItems: 'baseline',
+              marginTop: 14, marginBottom: 4,
+              fontSize: 9, letterSpacing: 2, textTransform: 'uppercase', color: 'var(--t3)',
+            }}>
+              <span>{g}</span>
+              <span style={{ color: isDebt ? 'var(--red)' : 'var(--t2)', fontVariantNumeric: 'tabular-nums' }}>
+                {isDebt ? '−' : ''}{money(Math.abs(subtotal))}
+              </span>
+            </div>
+          );
+
+          // Tabs view: chips to pick one group.
+          if (acctView === 'tabs' && grouped.length > 1) {
+            const current = grouped.find((s) => s.group === activeGroup) || grouped[0];
+            return (
+              <>
+                {viewToggle(acctView, setAcctView)}
+                <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', margin: '4px 0 10px' }}>
+                  {grouped.map((s) => (
+                    <button
+                      key={s.group}
+                      type="button"
+                      onClick={() => setActiveGroup(s.group)}
+                      className={`chip ${current.group === s.group ? '' : ''}`}
+                      style={{
+                        fontSize: 9, letterSpacing: 1, padding: '6px 10px',
+                        background: current.group === s.group ? 'var(--t1)' : 'transparent',
+                        color: current.group === s.group ? 'var(--bg)' : 'var(--t2)',
+                        border: '1px solid var(--b2)', borderRadius: 20, cursor: 'pointer',
+                        textTransform: 'uppercase',
+                      }}
+                    >
+                      {s.group} ({s.accounts.length})
+                    </button>
+                  ))}
+                </div>
+                {sectionHeader(current.group, current.subtotal, current.isDebt)}
+                {current.accounts.map(renderRow)}
+              </>
+            );
+          }
+
+          // Grouped view: all sections stacked.
+          return (
+            <>
+              {grouped.length > 1 && viewToggle(acctView, setAcctView)}
+              {grouped.map((s) => (
+                <div key={s.group}>
+                  {sectionHeader(s.group, s.subtotal, s.isDebt)}
+                  {s.accounts.map(renderRow)}
+                </div>
+              ))}
+            </>
+          );
+        })()}
 
         {(() => {
           const accountedItemIds = new Set(accounts.map((a) => a.plaid_item_id).filter(Boolean));
@@ -406,5 +498,39 @@ export default function MorePage({ data, session, onSignOut, onOpenAccount }) {
         </button>
       </div>
     </>
+  );
+}
+
+// Small toggle between grouped-all-on-one-page and one-group-tabs views.
+function viewToggle(acctView, setAcctView) {
+  return (
+    <div style={{ display: 'flex', gap: 6, marginBottom: 4 }}>
+      <button
+        type="button"
+        onClick={() => setAcctView('grouped')}
+        style={{
+          fontSize: 8, letterSpacing: 1.5, textTransform: 'uppercase',
+          padding: '4px 9px', borderRadius: 20, cursor: 'pointer',
+          border: '1px solid var(--b2)',
+          background: acctView === 'grouped' ? 'var(--t1)' : 'transparent',
+          color: acctView === 'grouped' ? 'var(--bg)' : 'var(--t3)',
+        }}
+      >
+        All groups
+      </button>
+      <button
+        type="button"
+        onClick={() => setAcctView('tabs')}
+        style={{
+          fontSize: 8, letterSpacing: 1.5, textTransform: 'uppercase',
+          padding: '4px 9px', borderRadius: 20, cursor: 'pointer',
+          border: '1px solid var(--b2)',
+          background: acctView === 'tabs' ? 'var(--t1)' : 'transparent',
+          color: acctView === 'tabs' ? 'var(--bg)' : 'var(--t3)',
+        }}
+      >
+        By type
+      </button>
+    </div>
   );
 }

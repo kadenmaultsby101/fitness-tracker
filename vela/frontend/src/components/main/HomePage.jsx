@@ -1,6 +1,7 @@
 import { money, moneyAbs, emojiFor, relDate, displayAccountName } from './format';
 import AnimatedNumber from './AnimatedNumber';
 import BankLogo from './BankLogo';
+import TxnIcon from './TxnIcon';
 import { colorFor } from './categoryColors';
 
 function setupSteps({ goals, budgets, plaidConnected }) {
@@ -262,12 +263,7 @@ export default function HomePage({ data, session, onAddTxn, onOpenAccount, onEdi
                 tabIndex={0}
                 style={{ cursor: onEditTxn ? 'pointer' : 'default' }}
               >
-                <div
-                  className="txn-em"
-                  style={{ boxShadow: `inset 0 0 0 1.5px ${colorFor(cat)}` }}
-                >
-                  {emojiFor(cat, t.subcategory)}
-                </div>
+                <TxnIcon txn={t} />
                 <div className="txn-bd">
                   <div className="txn-nm">{t.merchant_name || t.name}</div>
                   <div className="txn-ct">
