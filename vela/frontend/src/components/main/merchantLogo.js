@@ -125,7 +125,10 @@ export function merchantDomain(merchantName, name) {
   return null;
 }
 
+// DuckDuckGo's icon service — free, no API key, reliable, and returns a
+// clean square icon for a domain. (Clearbit's free logo CDN was shut
+// down by HubSpot in late 2024, which is why logos stopped rendering.)
 export function merchantLogoUrl(merchantName, name) {
   const domain = merchantDomain(merchantName, name);
-  return domain ? `https://logo.clearbit.com/${domain}` : null;
+  return domain ? `https://icons.duckduckgo.com/ip3/${domain}.ico` : null;
 }

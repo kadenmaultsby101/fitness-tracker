@@ -3,6 +3,7 @@ import AnimatedNumber from './AnimatedNumber';
 import BankLogo from './BankLogo';
 import TxnIcon from './TxnIcon';
 import { colorFor } from './categoryColors';
+import { groupAccounts } from './accountGroups';
 
 function setupSteps({ goals, budgets, plaidConnected }) {
   return [
@@ -202,41 +203,55 @@ export default function HomePage({ data, session, onAddTxn, onOpenAccount, onEdi
       ) : loading ? (
         <SkeletonAccounts />
       ) : (
-        <div className="acc-scr">
-          {accounts.map((a) => {
-            const isDebt = a.type === 'credit' || a.type === 'loan';
-            const bal = Number(a.balance_current) || 0;
-            const item = itemsById[a.plaid_item_id];
-            const accent = item?.institution_color;
-            return (
-              <div
-                key={a.id}
-                className="am"
-                onClick={() => onOpenAccount?.(a)}
-                role="button"
-                tabIndex={0}
-                style={{
-                  cursor: onOpenAccount ? 'pointer' : 'default',
-                  borderTop: accent ? `2px solid ${accent}` : undefined,
-                }}
-              >
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
-                  <BankLogo item={item} size={22} fallbackName={a.name} />
-                  <div className="am-inst" style={{ margin: 0 }}>
-                    {item?.institution_name || a.subtype || a.type}
+        groupAccounts(accounts).map((section) => (
+          <div key={section.group} style={{ marginBottom: 6 }}>
+            <div style={{
+              display: 'flex', justifyContent: 'space-between', alignItems: 'baseline',
+              padding: '4px 14px 6px',
+              fontSize: 9, letterSpacing: 2, textTransform: 'uppercase', color: 'var(--t3)',
+            }}>
+              <span>{section.group}</span>
+              <span style={{ color: section.isDebt ? 'var(--red)' : 'var(--t2)', fontVariantNumeric: 'tabular-nums' }}>
+                {section.isDebt ? '−' : ''}{money(Math.abs(section.subtotal))}
+              </span>
+            </div>
+            <div className="acc-scr">
+              {section.accounts.map((a) => {
+                const isDebt = a.type === 'credit' || a.type === 'loan';
+                const bal = Number(a.balance_current) || 0;
+                const item = itemsById[a.plaid_item_id];
+                const accent = item?.institution_color;
+                return (
+                  <div
+                    key={a.id}
+                    className="am"
+                    onClick={() => onOpenAccount?.(a)}
+                    role="button"
+                    tabIndex={0}
+                    style={{
+                      cursor: onOpenAccount ? 'pointer' : 'default',
+                      borderTop: accent ? `2px solid ${accent}` : undefined,
+                    }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                      <BankLogo item={item} size={22} fallbackName={a.name} />
+                      <div className="am-inst" style={{ margin: 0 }}>
+                        {item?.institution_name || a.subtype || a.type}
+                      </div>
+                    </div>
+                    <div className="am-nm">
+                      {displayAccountName(a)}
+                      {a.mask ? ` ··${a.mask}` : ''}
+                    </div>
+                    <div className="am-bal" style={isDebt ? { color: 'var(--red)' } : undefined}>
+                      {isDebt ? '−' : ''}{money(bal)}
+                    </div>
                   </div>
-                </div>
-                <div className="am-nm">
-                  {displayAccountName(a)}
-                  {a.mask ? ` ··${a.mask}` : ''}
-                </div>
-                <div className="am-bal" style={isDebt ? { color: 'var(--red)' } : undefined}>
-                  {isDebt ? '−' : ''}{money(bal)}
-                </div>
-              </div>
-            );
-          })}
-        </div>
+                );
+              })}
+            </div>
+          </div>
+        ))
       )}
 
       <div className="card">
