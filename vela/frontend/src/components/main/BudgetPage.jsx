@@ -4,7 +4,7 @@ import SpendingDonut from './SpendingDonut';
 import WeeklyTrend from './WeeklyTrend';
 import TxnIcon from './TxnIcon';
 
-export default function BudgetPage({ data, onEditBudgets, onAddTxn, onEditTxn }) {
+export default function BudgetPage({ data, onEditBudgets, onAddTxn, onEditTxn, onOpenCategory }) {
   const { accounts, transactions, budgets, derived, profile } = data;
   const accountsById = Object.fromEntries((accounts || []).map((a) => [a.id, a]));
   const today = new Date().toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
@@ -69,6 +69,7 @@ export default function BudgetPage({ data, onEditBudgets, onAddTxn, onEditTxn })
         <SpendingDonut
           byCategory={derived.byCategory}
           monthSpent={derived.monthSpent}
+          onSelectCategory={onOpenCategory}
         />
       </div>
 
@@ -114,7 +115,14 @@ export default function BudgetPage({ data, onEditBudgets, onAddTxn, onEditTxn })
             const over = r.limit > 0 && r.spent > r.limit;
             const accent = colorFor(r.cat);
             return (
-              <div key={r.cat} className="br">
+              <div
+                key={r.cat}
+                className="br"
+                role={onOpenCategory ? 'button' : undefined}
+                tabIndex={onOpenCategory ? 0 : undefined}
+                onClick={onOpenCategory ? () => onOpenCategory(r.cat) : undefined}
+                style={{ cursor: onOpenCategory ? 'pointer' : 'default' }}
+              >
                 <div className="br-top">
                   <span className="br-cat" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                     <span style={{

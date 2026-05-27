@@ -5,7 +5,7 @@ import { money } from './format';
 // legend rendered to the right (or below on narrow screens).
 // Origin-inspired: muted segments, no labels on the ring, fixed-size
 // SVG so it never reflows.
-export default function SpendingDonut({ byCategory, monthSpent, size = 160, thickness = 22 }) {
+export default function SpendingDonut({ byCategory, monthSpent, size = 160, thickness = 22, onSelectCategory }) {
   const entries = Object.entries(byCategory || {})
     .filter(([, amt]) => Number(amt) > 0)
     .sort((a, b) => b[1] - a[1]);
@@ -112,6 +112,9 @@ export default function SpendingDonut({ byCategory, monthSpent, size = 160, thic
         {segments.slice(0, 8).map((s) => (
           <div
             key={s.cat}
+            role={onSelectCategory ? 'button' : undefined}
+            tabIndex={onSelectCategory ? 0 : undefined}
+            onClick={onSelectCategory ? () => onSelectCategory(s.cat) : undefined}
             style={{
               display: 'flex',
               alignItems: 'center',
@@ -119,6 +122,7 @@ export default function SpendingDonut({ byCategory, monthSpent, size = 160, thic
               fontSize: 10.5,
               padding: '5px 0',
               borderBottom: '1px solid var(--b1)',
+              cursor: onSelectCategory ? 'pointer' : 'default',
             }}
           >
             <span style={{

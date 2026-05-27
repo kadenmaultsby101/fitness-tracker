@@ -37,9 +37,9 @@ export default function TxnIcon({ txn }) {
       <div
         className="txn-em"
         style={{
-          padding: 0,
           overflow: 'hidden',
-          background: '#fff',
+          background: '#fafafa',
+          padding: 6,
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
@@ -48,9 +48,7 @@ export default function TxnIcon({ txn }) {
         <img
           src={src}
           alt=""
-          width={36}
-          height={36}
-          style={{ width: '100%', height: '100%', objectFit: 'contain' }}
+          style={{ width: '100%', height: '100%', objectFit: 'contain', borderRadius: 3 }}
           onError={() => setStage((s) => (s === 0 && faviconLogo ? 1 : 2))}
           loading="lazy"
         />
