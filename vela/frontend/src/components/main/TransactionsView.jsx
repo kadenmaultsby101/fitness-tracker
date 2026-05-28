@@ -10,6 +10,8 @@ import TxnIcon from './TxnIcon';
 export default function TransactionsView({ data, filter, onBack, onOpenMerchant, onEditTxn }) {
   const { transactions, accounts } = data;
   const isSearch = filter?.kind === 'search';
+  const isAll = filter?.kind === 'all';
+  const hasSearchBox = isSearch || isAll;
   const [query, setQuery] = useState(filter?.value || '');
   const accountsById = useMemo(
     () => Object.fromEntries((accounts || []).map((a) => [a.id, a])),
@@ -21,9 +23,9 @@ export default function TransactionsView({ data, filter, onBack, onOpenMerchant,
     if (filter.kind === 'category') {
       return transactions.filter((t) => (t.category || 'Other') === filter.value);
     }
-    if (filter.kind === 'search') {
+    if (filter.kind === 'search' || filter.kind === 'all') {
       const q = query.trim().toLowerCase();
-      if (!q) return [];
+      if (!q) return filter.kind === 'all' ? transactions : [];
       return transactions.filter((t) => {
         const hay = `${t.merchant_name || ''} ${t.name || ''} ${t.category || ''} ${t.subcategory || ''}`.toLowerCase();
         return hay.includes(q);
@@ -64,24 +66,29 @@ export default function TransactionsView({ data, filter, onBack, onOpenMerchant,
     <>
       <header className="ph">
         <div className="ph-l">
-          <button
-            type="button"
-            onClick={onBack}
-            style={{
-              background: 'none', border: 'none', color: 'var(--t2)',
-              fontSize: 11, fontWeight: 600, cursor: 'pointer', padding: 0, marginBottom: 6,
-            }}
-          >
-            ← Back
-          </button>
-          {isSearch ? (
+          {onBack && (
+            <button
+              type="button"
+              onClick={onBack}
+              style={{
+                background: 'none', border: 'none', color: 'var(--t2)',
+                fontSize: 11, fontWeight: 600, cursor: 'pointer', padding: 0, marginBottom: 6,
+              }}
+            >
+              ← Back
+            </button>
+          )}
+          {isAll && (
+            <div className="ph-t" style={{ marginBottom: 8 }}>Transactions</div>
+          )}
+          {hasSearchBox ? (
             <input
               className="finp"
               type="text"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               placeholder="Search merchant, category…"
-              autoFocus
+              autoFocus={isSearch}
               style={{ marginBottom: 6, marginTop: 2 }}
             />
           ) : (

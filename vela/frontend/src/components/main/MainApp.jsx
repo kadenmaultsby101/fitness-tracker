@@ -10,22 +10,27 @@ import SagePage from './SagePage';
 import MorePage from './MorePage';
 import InsightsPage from './InsightsPage';
 import SubscriptionsPage from './SubscriptionsPage';
+import AccountsPage from './AccountsPage';
+import InvestmentsPage from './InvestmentsPage';
+import CashFlowPage from './CashFlowPage';
 import AccountDetailPage from './AccountDetailPage';
 import TransactionsView from './TransactionsView';
 import AddTransactionModal from './AddTransactionModal';
 import AddAccountModal from './AddAccountModal';
 import GoalModal from './GoalModal';
 import BudgetModal from './BudgetModal';
+import Drawer from './Drawer';
 import { NAV_ICON } from './NavIcons';
 import '../../styles/app.css';
 
+// Bottom nav = 5 most-used; the Menu button opens the full Monarch-style
+// drawer (Drawer.jsx) with every section.
 const NAV = [
-  { id: 'home',     lbl: 'Home' },
-  { id: 'budget',   lbl: 'Budget' },
-  { id: 'insights', lbl: 'Insights' },
-  { id: 'goals',    lbl: 'Goals' },
-  { id: 'coach',    lbl: 'Sage' },
-  { id: 'more',     lbl: 'More' },
+  { id: 'home',         lbl: 'Home' },
+  { id: 'transactions', lbl: 'Transactions' },
+  { id: 'budget',       lbl: 'Budget' },
+  { id: 'coach',        lbl: 'Sage' },
+  { id: 'menu',         lbl: 'Menu' },
 ];
 
 export default function MainApp({ session }) {
@@ -33,6 +38,7 @@ export default function MainApp({ session }) {
   const [selectedAccountId, setSelectedAccountId] = useState(null);
   const [txnFilter, setTxnFilter] = useState(null); // { kind: 'category'|'merchant', value }
   const [modal, setModal] = useState(null); // 'txn' | { kind: 'editAccount', account } | { kind: 'editTxn', txn } | { kind: 'goal', goal? } | 'budget'
+  const [menuOpen, setMenuOpen] = useState(false);
   const data = useFinancialData();
 
   const openAccount = (a) => {
@@ -171,6 +177,21 @@ export default function MainApp({ session }) {
         onOpenSubscriptions={openSubscriptions}
       />
     );
+  } else if (page === 'accounts') {
+    activePage = <AccountsPage data={data} onOpenAccount={openAccount} />;
+  } else if (page === 'investments') {
+    activePage = <InvestmentsPage data={data} onOpenAccount={openAccount} />;
+  } else if (page === 'cashflow') {
+    activePage = <CashFlowPage data={data} />;
+  } else if (page === 'transactions') {
+    activePage = (
+      <TransactionsView
+        data={data}
+        filter={{ kind: 'all' }}
+        onOpenMerchant={openMerchant}
+        onEditTxn={(t) => setModal({ kind: 'editTxn', txn: t })}
+      />
+    );
   } else if (page === 'coach') {
     activePage = <SagePage data={data} session={session} />;
   } else if (page === 'more') {
@@ -256,15 +277,17 @@ export default function MainApp({ session }) {
       <nav className="bnav" role="navigation">
         {NAV.map((n) => {
           const Icon = NAV_ICON[n.id];
-          const active = page === n.id
-            || (n.id === 'home' && page === 'account')
-            || (n.id === 'insights' && page === 'subscriptions');
+          const active = n.id === 'menu'
+            ? menuOpen
+            : page === n.id
+              || (n.id === 'home' && page === 'account')
+              || (n.id === 'transactions' && page === 'txnview');
           return (
             <button
               key={n.id}
               type="button"
               className={`bn ${active ? 'on' : ''}`}
-              onClick={() => setPage(n.id)}
+              onClick={() => (n.id === 'menu' ? setMenuOpen(true) : setPage(n.id))}
             >
               <span className="bn-ic">{Icon ? <Icon /> : null}</span>
               <span className="bn-lbl">{n.lbl}</span>
@@ -272,6 +295,13 @@ export default function MainApp({ session }) {
           );
         })}
       </nav>
+
+      <Drawer
+        open={menuOpen}
+        page={page}
+        onNavigate={setPage}
+        onClose={() => setMenuOpen(false)}
+      />
 
       {modal === 'txn' && (
         <AddTransactionModal
