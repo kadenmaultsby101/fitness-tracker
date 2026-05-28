@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { supabase } from '../lib/supabase';
+import { supabase, signOut } from '../lib/supabase';
 import { API } from '../lib/apiUrl';
 import { SageIcon, InsightsIcon, AccountsIcon, RecurringIcon } from './main/NavIcons';
 
@@ -134,7 +134,7 @@ export default function Paywall({ onUnlocked }) {
             </div>
           )}
           <div style={{ marginTop: 16 }}>
-            <button type="button" onClick={() => supabase.auth.signOut()} style={{ background: 'none', border: 'none', color: 'var(--t3)', fontSize: 10, letterSpacing: 2, textTransform: 'uppercase', cursor: 'pointer' }}>
+            <button type="button" onClick={signOut} style={{ background: 'none', border: 'none', color: 'var(--t3)', fontSize: 10, letterSpacing: 2, textTransform: 'uppercase', cursor: 'pointer' }}>
               Sign out
             </button>
           </div>

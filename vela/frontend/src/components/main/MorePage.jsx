@@ -97,7 +97,7 @@ export default function MorePage({ data, session, onSignOut, onOpenAccount }) {
 
       // Sign out (clears the auth token from localStorage) then reload
       // back to the auth screen.
-      await supabase.auth.signOut();
+      await supabase.auth.signOut({ scope: 'local' });
       window.location.replace('/');
     } catch (err) {
       console.error('[account-delete]', err);
