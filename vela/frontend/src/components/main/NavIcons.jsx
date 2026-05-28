@@ -39,6 +39,11 @@ export function InsightsIcon() {
     <svg {...base}><path d="M21 12a9 9 0 1 1-9-9v9Z" /><path d="M14 3.5a9 9 0 0 1 6.5 6.5H14Z" /></svg>
   );
 }
+export function SearchIcon() {
+  return (
+    <svg {...base}><circle cx="11" cy="11" r="7" /><path d="m20 20-3.5-3.5" /></svg>
+  );
+}
 
 export const NAV_ICON = {
   home: HomeIcon,

@@ -46,6 +46,10 @@ export default function MainApp({ session }) {
     setTxnFilter({ kind: 'merchant', value });
     setPage('txnview');
   };
+  const openSearch = () => {
+    setTxnFilter({ kind: 'search', value: '' });
+    setPage('txnview');
+  };
 
   const closeModal = () => setModal(null);
 
@@ -132,6 +136,7 @@ export default function MainApp({ session }) {
         session={session}
         onAddTxn={() => setModal('txn')}
         onOpenAccount={openAccount}
+        onOpenSearch={openSearch}
         onEditTxn={(t) => setModal({ kind: 'editTxn', txn: t })}
         onGoTo={setPage}
       />
@@ -144,6 +149,7 @@ export default function MainApp({ session }) {
         onAddTxn={() => setModal('txn')}
         onEditTxn={(t) => setModal({ kind: 'editTxn', txn: t })}
         onOpenCategory={openCategory}
+        onOpenSearch={openSearch}
       />
     );
   } else if (page === 'goals') {

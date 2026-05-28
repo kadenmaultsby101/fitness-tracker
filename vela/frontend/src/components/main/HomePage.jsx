@@ -5,6 +5,7 @@ import TxnIcon from './TxnIcon';
 import AllocationBar from './AllocationBar';
 import { colorFor } from './categoryColors';
 import { groupAccounts } from './accountGroups';
+import { SearchIcon } from './NavIcons';
 
 function setupSteps({ goals, budgets, plaidConnected }) {
   return [
@@ -14,7 +15,7 @@ function setupSteps({ goals, budgets, plaidConnected }) {
   ];
 }
 
-export default function HomePage({ data, session, onAddTxn, onOpenAccount, onEditTxn, onGoTo }) {
+export default function HomePage({ data, session, onAddTxn, onOpenAccount, onOpenSearch, onEditTxn, onGoTo }) {
   const { profile, accounts, plaidItems = [], transactions, goals, budgets, derived, loading, error } = data;
   const itemsById = Object.fromEntries(plaidItems.map((it) => [it.id, it]));
   const firstName =
@@ -67,9 +68,15 @@ export default function HomePage({ data, session, onAddTxn, onOpenAccount, onEdi
           <div className="ph-t">Vela</div>
           <div className="ph-s">Good day, {firstName} · {today}</div>
         </div>
-        <button type="button" className="ph-action" onClick={onAddTxn} aria-label="Add transaction">
-          +
-        </button>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button type="button" className="ph-action" onClick={onOpenSearch} aria-label="Search transactions"
+            style={{ background: 'var(--c2)', color: 'var(--t1)' }}>
+            <SearchIcon />
+          </button>
+          <button type="button" className="ph-action" onClick={onAddTxn} aria-label="Add transaction">
+            +
+          </button>
+        </div>
       </header>
 
       <div className="nw">

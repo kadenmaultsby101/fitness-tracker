@@ -129,6 +129,7 @@
 }
 .ph-action:hover { opacity: 0.9; }
 .ph-action:active { transform: scale(0.94); }
+.ph-action svg { width: 18px; height: 18px; }
 
 /* CARD */
 .card {

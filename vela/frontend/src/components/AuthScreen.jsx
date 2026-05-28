@@ -11,6 +11,7 @@ export default function AuthScreen() {
   const [error, setError] = useState('');
   const [info, setInfo] = useState('');
   const [busy, setBusy] = useState(false);
+  const [pendingEmail, setPendingEmail] = useState('');
 
   const isSignup = mode === 'signup';
 
@@ -49,8 +50,8 @@ export default function AuthScreen() {
         });
         if (error) throw error;
         if (!data.session) {
-          setInfo('Check your email to confirm your account, then sign in.');
-          setMode('signin');
+          // Email confirmation required — show a dedicated "check inbox" state.
+          setPendingEmail(email);
         }
       } else {
         const { error } = await supabase.auth.signInWithPassword({ email, password });
@@ -58,6 +59,40 @@ export default function AuthScreen() {
       }
     } catch (err) {
       setError(err.message || 'Something went wrong.');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const signInWithGoogle = async () => {
+    if (busy) return;
+    setError('');
+    setInfo('');
+    setBusy(true);
+    try {
+      const { error } = await supabase.auth.signInWithOAuth({
+        provider: 'google',
+        options: { redirectTo: window.location.origin },
+      });
+      if (error) throw error;
+      // Success redirects away — no need to clear busy.
+    } catch (err) {
+      setError(err.message || 'Could not start Google sign-in.');
+      setBusy(false);
+    }
+  };
+
+  const resendConfirmation = async () => {
+    if (busy || !pendingEmail) return;
+    setBusy(true);
+    setError('');
+    setInfo('');
+    try {
+      const { error } = await supabase.auth.resend({ type: 'signup', email: pendingEmail });
+      if (error) throw error;
+      setInfo('Sent again — check your inbox.');
+    } catch (err) {
+      setError(err.message || 'Could not resend. Try again in a minute.');
     } finally {
       setBusy(false);
     }
@@ -85,6 +120,42 @@ export default function AuthScreen() {
     }
   };
 
+  if (pendingEmail) {
+    return (
+      <div className="auth-screen">
+        <div className="auth-brand">
+          <div className="auth-wordmark">Vela</div>
+          <div className="auth-tagline">Financial OS</div>
+        </div>
+        <div className="auth-card">
+          <div style={{ fontFamily: 'var(--serif)', fontSize: 26, fontWeight: 500, marginBottom: 8 }}>
+            Check your inbox
+          </div>
+          <div className="auth-note" style={{ marginBottom: 14 }}>
+            We sent a confirmation link to <strong>{pendingEmail}</strong>. Click it to
+            activate your account, then come back and sign in.
+          </div>
+          {error && <div className="auth-error">{error}</div>}
+          {info && <div className="auth-note">{info}</div>}
+          <button type="button" className="auth-submit" onClick={resendConfirmation} disabled={busy}>
+            {busy ? '…' : 'Resend email'}
+          </button>
+          <button
+            type="button"
+            onClick={() => { setPendingEmail(''); setMode('signin'); setError(''); setInfo(''); }}
+            style={{
+              background: 'none', border: 'none', color: 'var(--t2)',
+              fontSize: 11, letterSpacing: 1, textTransform: 'uppercase',
+              cursor: 'pointer', padding: '12px 0 0', width: '100%',
+            }}
+          >
+            Back to sign in
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="auth-screen">
       <div className="auth-brand">
@@ -109,6 +180,18 @@ export default function AuthScreen() {
             Sign Up
           </button>
         </div>
+
+        <button type="button" className="auth-google" onClick={signInWithGoogle} disabled={busy}>
+          <svg width="17" height="17" viewBox="0 0 18 18" aria-hidden="true">
+            <path fill="#4285F4" d="M17.64 9.2c0-.64-.06-1.25-.16-1.84H9v3.48h4.84a4.14 4.14 0 0 1-1.8 2.72v2.26h2.92c1.7-1.57 2.68-3.88 2.68-6.62Z"/>
+            <path fill="#34A853" d="M9 18c2.43 0 4.47-.8 5.96-2.18l-2.92-2.26c-.8.54-1.84.86-3.04.86-2.34 0-4.32-1.58-5.03-3.7H.96v2.34A9 9 0 0 0 9 18Z"/>
+            <path fill="#FBBC05" d="M3.97 10.72a5.4 5.4 0 0 1 0-3.44V4.94H.96a9 9 0 0 0 0 8.12l3.01-2.34Z"/>
+            <path fill="#EA4335" d="M9 3.58c1.32 0 2.5.45 3.44 1.35l2.58-2.58A9 9 0 0 0 .96 4.94l3.01 2.34C4.68 5.16 6.66 3.58 9 3.58Z"/>
+          </svg>
+          Continue with Google
+        </button>
+
+        <div className="auth-divider"><span>or</span></div>
 
         {error && <div className="auth-error">{error}</div>}
         {info && <div className="auth-note">{info}</div>}

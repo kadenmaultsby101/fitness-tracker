@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import { supabase } from './lib/supabase';
 import AuthScreen from './components/AuthScreen';
 import Onboarding from './components/Onboarding';
@@ -13,6 +13,10 @@ export default function App() {
   const [profile, setProfile] = useState(null);
   const [loading, setLoading] = useState(true);
   const [bootError, setBootError] = useState('');
+  const [justConfirmed, setJustConfirmed] = useState(false);
+  // True when this page load arrived via an email-confirmation link, so we
+  // can show a brief "Email confirmed" flash (not on normal password logins).
+  const confirmFromLinkRef = useRef(false);
 
   const loadProfile = useCallback(async (s) => {
     if (!s) {
@@ -42,6 +46,11 @@ export default function App() {
 
   useEffect(() => {
     let mounted = true;
+
+    // Capture (synchronously, before detectSessionInUrl clears the hash)
+    // whether we landed here from an email-confirmation link.
+    const authStr = (window.location.hash || '') + (window.location.search || '');
+    confirmFromLinkRef.current = /type=signup|type=email/.test(authStr);
 
     // Safety: if the boot sequence stalls, render whatever we have so the
     // user isn't stuck on the splash forever.
@@ -78,8 +87,13 @@ export default function App() {
         }
       });
 
-    const { data: sub } = supabase.auth.onAuthStateChange(async (_event, s) => {
+    const { data: sub } = supabase.auth.onAuthStateChange(async (event, s) => {
       if (!mounted) return;
+      if (event === 'SIGNED_IN' && s && confirmFromLinkRef.current) {
+        confirmFromLinkRef.current = false;
+        setJustConfirmed(true);
+        setTimeout(() => { if (mounted) setJustConfirmed(false); }, 2200);
+      }
       setSession(s);
       await loadProfile(s);
     });
@@ -92,6 +106,7 @@ export default function App() {
   }, [loadProfile]);
 
   if (loading) return <CenteredLabel text="Loading" />;
+  if (justConfirmed) return <CenteredLabel text="Email confirmed — you're in" />;
 
   // Surface a boot error banner above the rest of the app so the user can
   // see what failed without opening dev tools.
