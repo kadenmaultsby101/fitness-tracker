@@ -1,9 +1,9 @@
 import Anthropic from '@anthropic-ai/sdk';
 import { getUser, supabaseAdmin } from './_lib/auth.js';
 import { buildUserContext } from './_lib/financialContext.js';
+import { getUserPlan, SAGE_LIMITS } from './_lib/billing.js';
 
 const SAGE_MODEL = 'claude-haiku-4-5';
-const SAGE_DAILY_LIMIT = 50;
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
@@ -26,7 +26,10 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: 'message required' });
     }
 
-    // Per-user daily rate limit — count user's outgoing messages today (UTC)
+    // Per-user daily rate limit — caps depend on plan (free vs pro). While
+    // the paywall is dormant, getUserPlan returns 'pro' for everyone.
+    const plan = await getUserPlan(user.id);
+    const dailyLimit = SAGE_LIMITS[plan] ?? SAGE_LIMITS.free;
     const todayUtcStart = new Date();
     todayUtcStart.setUTCHours(0, 0, 0, 0);
     const { count: todayCount, error: countErr } = await supabaseAdmin
@@ -37,9 +40,12 @@ export default async function handler(req, res) {
       .gte('created_at', todayUtcStart.toISOString());
     if (countErr) {
       console.warn('[sage] rate-limit check failed, allowing through', countErr);
-    } else if ((todayCount || 0) >= SAGE_DAILY_LIMIT) {
+    } else if ((todayCount || 0) >= dailyLimit) {
       return res.status(429).json({
-        error: `You've hit today's Sage limit (${SAGE_DAILY_LIMIT} messages). Resets at midnight UTC.`,
+        error: plan === 'free'
+          ? `You've used today's ${dailyLimit} free Sage messages. Upgrade to Vela Pro for unlimited.`
+          : `You've hit today's Sage limit (${dailyLimit} messages). Resets at midnight UTC.`,
+        upgrade: plan === 'free',
       });
     }
 

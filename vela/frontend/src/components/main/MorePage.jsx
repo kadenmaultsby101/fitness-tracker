@@ -5,7 +5,9 @@ import { money } from './format';
 import PlaidLinkButton from '../PlaidLinkButton';
 import BankLogo from './BankLogo';
 import FeedbackCard from './FeedbackCard';
+import UpgradeCard from './UpgradeCard';
 import { groupAccounts } from './accountGroups';
+import { isPro, PAYWALL_ENABLED } from '../../lib/plan';
 
 const SETTINGS_KEYS = [
   { col: 'notify_transactions',   lbl: 'Transaction Alerts',   sub: 'Notify on every transaction' },
@@ -38,6 +40,25 @@ export default function MorePage({ data, session, onSignOut, onOpenAccount }) {
   const [deleteState, setDeleteState] = useState('idle');
   const [deleteConfirmText, setDeleteConfirmText] = useState('');
   const [deleteError, setDeleteError] = useState('');
+
+  const [portalBusy, setPortalBusy] = useState(false);
+  const openBillingPortal = async () => {
+    if (portalBusy) return;
+    setPortalBusy(true);
+    try {
+      const { data: sess } = await supabase.auth.getSession();
+      const token = sess.session?.access_token;
+      const res = await fetch(`${API}/api/stripe/portal`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const body = await res.json().catch(() => ({}));
+      if (res.ok && body.url) window.location.href = body.url;
+      else setPortalBusy(false);
+    } catch {
+      setPortalBusy(false);
+    }
+  };
 
   const initiateDelete = () => {
     setDeleteState('confirm');
@@ -178,6 +199,19 @@ export default function MorePage({ data, session, onSignOut, onOpenAccount }) {
           </div>
         )}
       </div>
+
+      {PAYWALL_ENABLED && !isPro(profile) && <UpgradeCard />}
+      {PAYWALL_ENABLED && isPro(profile) && (
+        <div className="card">
+          <div className="ctitle">Vela Pro</div>
+          <div style={{ fontSize: 12, color: 'var(--t2)', lineHeight: 1.6, marginBottom: 12 }}>
+            You're on <strong style={{ color: 'var(--t1)' }}>Pro</strong> — unlimited Sage + proactive insights. Thank you.
+          </div>
+          <button type="button" className="bsec" style={{ width: '100%' }} onClick={openBillingPortal} disabled={portalBusy}>
+            {portalBusy ? 'Opening…' : 'Manage subscription'}
+          </button>
+        </div>
+      )}
 
       <div className="card">
         <div className="ctitle">
