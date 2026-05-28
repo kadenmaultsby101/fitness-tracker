@@ -4,13 +4,20 @@ import { colorFor } from './categoryColors';
 import { deriveForMonth } from '../../hooks/useFinancialData';
 import MonthSwitcher from './MonthSwitcher';
 import TxnIcon from './TxnIcon';
+import CashFlowSankey from './CashFlowSankey';
+import { detectSubscriptions } from './detectSubscriptions';
 
-export default function InsightsPage({ data, onOpenCategory, onOpenMerchant }) {
+export default function InsightsPage({ data, onOpenCategory, onOpenMerchant, onOpenSubscriptions }) {
   const { accounts, transactions } = data;
   const [offset, setOffset] = useState(0);
 
   const view = deriveForMonth(accounts, transactions, offset);
   const prev = deriveForMonth(accounts, transactions, offset - 1);
+
+  const { subscriptions, monthlyTotal: subsMonthly } = useMemo(
+    () => detectSubscriptions(transactions),
+    [transactions]
+  );
 
   const spent = view.monthSpent;
   const prevSpent = prev.monthSpent;
@@ -81,6 +88,48 @@ export default function InsightsPage({ data, onOpenCategory, onOpenMerchant }) {
           </div>
         </div>
       </div>
+
+      {/* Cash flow */}
+      <div className="card">
+        <div className="ctitle">Cash Flow · {view.label}</div>
+        <CashFlowSankey
+          income={view.monthIncome}
+          byCategory={view.byCategory}
+          remaining={view.monthRemaining}
+        />
+      </div>
+
+      {/* Recurring / subscriptions */}
+      {subscriptions.length > 0 && (
+        <div className="card">
+          <div className="ctitle">
+            <span>Recurring · {money(subsMonthly)}/mo</span>
+            <button type="button" className="ctitle-act" onClick={onOpenSubscriptions}>
+              View all ({subscriptions.length}) →
+            </button>
+          </div>
+          {subscriptions.slice(0, 3).map((s) => (
+            <div
+              key={s.merchant + s.amount}
+              className="txn"
+              role="button"
+              tabIndex={0}
+              onClick={() => onOpenMerchant?.(s.merchant)}
+              style={{ cursor: 'pointer' }}
+            >
+              <TxnIcon txn={s.sample} />
+              <div className="txn-bd">
+                <div className="txn-nm">{s.merchant}</div>
+                <div className="txn-ct">{s.cadence}</div>
+              </div>
+              <div className="txn-r">
+                <div className="txn-amt">{money(s.amount)}</div>
+                <div className="txn-dt">{money(s.monthlyEstimate)}/mo</div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
 
       {/* Top categories */}
       <div className="card">

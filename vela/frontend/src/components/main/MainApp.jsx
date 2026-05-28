@@ -9,6 +9,7 @@ import GoalsPage from './GoalsPage';
 import SagePage from './SagePage';
 import MorePage from './MorePage';
 import InsightsPage from './InsightsPage';
+import SubscriptionsPage from './SubscriptionsPage';
 import AccountDetailPage from './AccountDetailPage';
 import TransactionsView from './TransactionsView';
 import AddTransactionModal from './AddTransactionModal';
@@ -50,6 +51,7 @@ export default function MainApp({ session }) {
     setTxnFilter({ kind: 'search', value: '' });
     setPage('txnview');
   };
+  const openSubscriptions = () => setPage('subscriptions');
 
   const closeModal = () => setModal(null);
 
@@ -166,6 +168,7 @@ export default function MainApp({ session }) {
         data={data}
         onOpenCategory={openCategory}
         onOpenMerchant={openMerchant}
+        onOpenSubscriptions={openSubscriptions}
       />
     );
   } else if (page === 'coach') {
@@ -187,6 +190,14 @@ export default function MainApp({ session }) {
         onBack={() => { setSelectedAccountId(null); setPage('home'); }}
         onEditAccount={(a) => setModal({ kind: 'editAccount', account: a })}
         onEditTxn={(t) => setModal({ kind: 'editTxn', txn: t })}
+      />
+    );
+  } else if (page === 'subscriptions') {
+    activePage = (
+      <SubscriptionsPage
+        data={data}
+        onBack={() => setPage('insights')}
+        onOpenMerchant={openMerchant}
       />
     );
   } else if (page === 'txnview') {
@@ -245,7 +256,9 @@ export default function MainApp({ session }) {
       <nav className="bnav" role="navigation">
         {NAV.map((n) => {
           const Icon = NAV_ICON[n.id];
-          const active = page === n.id || (n.id === 'home' && page === 'account');
+          const active = page === n.id
+            || (n.id === 'home' && page === 'account')
+            || (n.id === 'insights' && page === 'subscriptions');
           return (
             <button
               key={n.id}
