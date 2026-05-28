@@ -1,6 +1,7 @@
 import Anthropic from '@anthropic-ai/sdk';
 import { getUser, supabaseAdmin } from './_lib/auth.js';
 import { buildUserContext } from './_lib/financialContext.js';
+import { getUserPlan } from './_lib/billing.js';
 
 const MODEL = 'claude-haiku-4-5';
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
@@ -106,6 +107,13 @@ export default async function handler(req, res) {
     if (!user) return res.status(401).json({ error: 'unauthorized' });
     if (!process.env.ANTHROPIC_API_KEY) {
       return res.status(503).json({ error: 'Insights not configured.' });
+    }
+
+    // Proactive insights are a Pro feature. While the paywall is dormant,
+    // getUserPlan returns 'pro' for everyone so this passes through.
+    const plan = await getUserPlan(user.id);
+    if (plan !== 'pro') {
+      return res.status(200).json({ pro_required: true, briefings: [], weekly: null });
     }
 
     const type = req.body?.type === 'weekly' ? 'weekly' : 'briefing';

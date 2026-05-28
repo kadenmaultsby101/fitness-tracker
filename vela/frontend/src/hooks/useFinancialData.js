@@ -79,7 +79,7 @@ export function useFinancialData() {
         Promise.all([
           supabase
             .from('profiles')
-            .select('id, name, monthly_income, onboarding_completed_at, notify_transactions, notify_weekly_summary, notify_ai_insights, two_factor_enabled')
+            .select('id, name, monthly_income, onboarding_completed_at, notify_transactions, notify_weekly_summary, notify_ai_insights, two_factor_enabled, plan')
             .eq('id', userId)
             .maybeSingle(),
           supabase
