@@ -3,6 +3,8 @@ import AnimatedNumber from './AnimatedNumber';
 import BankLogo from './BankLogo';
 import TxnIcon from './TxnIcon';
 import AllocationBar from './AllocationBar';
+import SageBriefings from './SageBriefings';
+import WeeklyRecap from './WeeklyRecap';
 import { colorFor } from './categoryColors';
 import { groupAccounts } from './accountGroups';
 import { SearchIcon } from './NavIcons';
@@ -78,6 +80,11 @@ export default function HomePage({ data, session, onAddTxn, onOpenAccount, onOpe
           </button>
         </div>
       </header>
+
+      <WeeklyRecap
+        enabled={hasAccounts && profile?.notify_weekly_summary !== false}
+        onGoTo={onGoTo}
+      />
 
       <div className="nw">
         <div className="nw-lbl">Total Net Worth</div>
@@ -180,13 +187,19 @@ export default function HomePage({ data, session, onAddTxn, onOpenAccount, onOpe
         </div>
       )}
 
-      <div className="aib">
-        <div className="ai-pill"><span className="ai-dot" />Sage · Live</div>
-        <div className="ai-txt">{insight}</div>
-        <button type="button" className="ai-more" onClick={() => onGoTo('coach')}>
-          Ask Sage →
-        </button>
-      </div>
+      <SageBriefings
+        enabled={hasAccounts && profile?.notify_ai_insights !== false}
+        onGoTo={onGoTo}
+        fallback={(
+          <div className="aib">
+            <div className="ai-pill"><span className="ai-dot" />Sage · Live</div>
+            <div className="ai-txt">{insight}</div>
+            <button type="button" className="ai-more" onClick={() => onGoTo('coach')}>
+              Ask Sage →
+            </button>
+          </div>
+        )}
+      />
 
       <div className="slbl">
         <span>Accounts</span>
