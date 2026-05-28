@@ -41,6 +41,8 @@ export default function MorePage({ data, session, onSignOut, onOpenAccount }) {
   const [deleteConfirmText, setDeleteConfirmText] = useState('');
   const [deleteError, setDeleteError] = useState('');
 
+  const [confirmingSignOut, setConfirmingSignOut] = useState(false);
+
   const [portalBusy, setPortalBusy] = useState(false);
   const openBillingPortal = async () => {
     if (portalBusy) return;
@@ -494,9 +496,25 @@ export default function MorePage({ data, session, onSignOut, onOpenAccount }) {
       </div>
 
       <div style={{ padding: '14px 14px 40px' }}>
-        <button type="button" className="bsec" style={{ width: '100%' }} onClick={onSignOut}>
-          Sign Out
-        </button>
+        {!confirmingSignOut ? (
+          <button type="button" className="bsec" style={{ width: '100%' }} onClick={() => setConfirmingSignOut(true)}>
+            Sign Out
+          </button>
+        ) : (
+          <>
+            <div className="mnote" style={{ marginBottom: 12, textAlign: 'center' }}>
+              Are you sure you want to sign out?
+            </div>
+            <div className="mbtns">
+              <button type="button" className="bsec" onClick={() => setConfirmingSignOut(false)}>
+                Cancel
+              </button>
+              <button type="button" className="bdel" style={{ flex: 1, marginTop: 0 }} onClick={onSignOut}>
+                Sign out
+              </button>
+            </div>
+          </>
+        )}
       </div>
     </>
   );
