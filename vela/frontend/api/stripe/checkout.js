@@ -9,11 +9,17 @@ export const config = { maxDuration: 30 };
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'method not allowed' });
   try {
-    if (!process.env.STRIPE_SECRET_KEY || !process.env.STRIPE_PRICE_ID) {
+    const monthlyPrice = process.env.STRIPE_PRICE_ID;
+    const annualPrice = process.env.STRIPE_PRICE_ID_ANNUAL;
+    if (!process.env.STRIPE_SECRET_KEY || !monthlyPrice) {
       return res.status(503).json({ error: 'Billing not configured.' });
     }
     const user = await getUser(req);
     if (!user) return res.status(401).json({ error: 'unauthorized' });
+
+    // Pick monthly (default) or annual price.
+    const interval = req.body?.interval === 'annual' ? 'annual' : 'monthly';
+    const price = interval === 'annual' && annualPrice ? annualPrice : monthlyPrice;
 
     const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
 
@@ -37,11 +43,13 @@ export default async function handler(req, res) {
     const sessionObj = await stripe.checkout.sessions.create({
       mode: 'subscription',
       customer: customerId,
-      line_items: [{ price: process.env.STRIPE_PRICE_ID, quantity: 1 }],
+      line_items: [{ price, quantity: 1 }],
       client_reference_id: user.id,
       success_url: `${origin}/?upgraded=1`,
       cancel_url: `${origin}/`,
       allow_promotion_codes: true,
+      // 7-day free trial — card collected up front, charged when the trial ends.
+      subscription_data: { trial_period_days: 7 },
     });
 
     return res.status(200).json({ url: sessionObj.url });

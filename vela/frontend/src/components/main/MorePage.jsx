@@ -200,7 +200,7 @@ export default function MorePage({ data, session, onSignOut, onOpenAccount }) {
         )}
       </div>
 
-      {PAYWALL_ENABLED && !isPro(profile) && <UpgradeCard />}
+      {PAYWALL_ENABLED && !isPro(profile) && <UpgradeCard onRedeemed={() => data.refresh()} />}
       {PAYWALL_ENABLED && isPro(profile) && (
         <div className="card">
           <div className="ctitle">Vela Pro</div>
