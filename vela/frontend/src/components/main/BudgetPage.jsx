@@ -6,8 +6,9 @@ import SpendingDonut from './SpendingDonut';
 import WeeklyTrend from './WeeklyTrend';
 import TxnIcon from './TxnIcon';
 import MonthSwitcher from './MonthSwitcher';
+import { SearchIcon } from './NavIcons';
 
-export default function BudgetPage({ data, onEditBudgets, onAddTxn, onEditTxn, onOpenCategory }) {
+export default function BudgetPage({ data, onEditBudgets, onAddTxn, onEditTxn, onOpenCategory, onOpenSearch }) {
   const { accounts, transactions, budgets, profile } = data;
   const accountsById = Object.fromEntries((accounts || []).map((a) => [a.id, a]));
 
@@ -38,7 +39,13 @@ export default function BudgetPage({ data, onEditBudgets, onAddTxn, onEditTxn, o
           <div className="ph-t">Budget</div>
           <div className="ph-s">Spending & budgets by month</div>
         </div>
-        <button type="button" className="ph-action" onClick={onAddTxn} aria-label="Add transaction">+</button>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button type="button" className="ph-action" onClick={onOpenSearch} aria-label="Search transactions"
+            style={{ background: 'var(--c2)', color: 'var(--t1)' }}>
+            <SearchIcon />
+          </button>
+          <button type="button" className="ph-action" onClick={onAddTxn} aria-label="Add transaction">+</button>
+        </div>
       </header>
 
       <div className="card">

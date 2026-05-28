@@ -51,10 +51,10 @@ export default async function handler(req, res) {
         .select('name, type, subtype, balance_current, mask')
         .eq('user_id', user.id),
       supabaseAdmin.from('transactions')
-        .select('name, merchant_name, amount, category, date')
+        .select('name, merchant_name, amount, category, subcategory, date')
         .eq('user_id', user.id)
         .order('date', { ascending: false })
-        .limit(50),
+        .limit(300),
       supabaseAdmin.from('goals')
         .select('name, current_amount, target_amount, monthly_contribution')
         .eq('user_id', user.id),
@@ -81,6 +81,23 @@ export default async function handler(req, res) {
     const fmt = (n) => '$' + Number(n || 0).toLocaleString('en-US', { maximumFractionDigits: 0 });
     const ob = profile.onboarding_data || {};
 
+    // Spending-by-category summary over the FULL recent history (up to 300
+    // txns), so Sage understands patterns even though only the latest ~100
+    // line items are rendered individually. Plaid: amount > 0 = outflow.
+    const catTotals = {};
+    for (const t of transactions) {
+      const amt = Number(t.amount) || 0;
+      if (amt <= 0) continue;
+      const cat = t.category || 'Other';
+      if (!catTotals[cat]) catTotals[cat] = { total: 0, count: 0 };
+      catTotals[cat].total += amt;
+      catTotals[cat].count += 1;
+    }
+    const categorySummary = Object.entries(catTotals)
+      .sort((a, b) => b[1].total - a[1].total)
+      .map(([cat, v]) => `- ${cat}: ${fmt(v.total)} across ${v.count} txn${v.count === 1 ? '' : 's'}`)
+      .join('\n');
+
     const systemPrompt = `You are Sage, the AI financial coach inside Vela — a premium personal finance app. You're talking with ${firstName}.
 
 USER CONTEXT
@@ -91,8 +108,11 @@ USER CONTEXT
 ACCOUNTS (${accounts.length})
 ${accounts.length ? accounts.map((a) => `- ${a.name} (${a.subtype || a.type}): ${fmt(a.balance_current)}`).join('\n') : '- (none connected yet)'}
 
-RECENT TRANSACTIONS (last ${Math.min(transactions.length, 20)})
-${transactions.length ? transactions.slice(0, 20).map((t) => `- ${t.date} | ${t.merchant_name || t.name} | ${fmt(t.amount)} | ${t.category || 'Other'}`).join('\n') : '- (none logged yet)'}
+SPENDING BY CATEGORY (derived from the last ${transactions.length} transactions — authoritative pattern data)
+${categorySummary || '- (no spending yet)'}
+
+RECENT TRANSACTIONS (latest ${Math.min(transactions.length, 100)} line items)
+${transactions.length ? transactions.slice(0, 100).map((t) => `- ${t.date} | ${t.merchant_name || t.name} | ${fmt(t.amount)} | ${t.category || 'Other'}`).join('\n') : '- (none logged yet)'}
 
 GOALS (${goals.length})
 ${goals.length ? goals.map((g) => {
@@ -109,6 +129,7 @@ STYLE
 - 2–3 short paragraphs max. No fluff, no disclaimers, no "consult a financial advisor."
 - Talk like a sharp friend who knows finance, not a chatbot.
 - If a number isn't in the data, say "I don't see that yet" instead of guessing.
+- The SPENDING BY CATEGORY totals reflect the user's fuller recent history — treat them as authoritative for spending patterns, and use the line items for specifics.
 - Plaid convention: in transactions, positive amounts = outflows (spending), negative = inflows (income).`;
 
     const trimmedHistory = (Array.isArray(history) ? history : []).slice(-20);

@@ -1,15 +1,16 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { money, moneyAbs, relDate, displayAccountName } from './format';
 import { colorFor } from './categoryColors';
 import TxnIcon from './TxnIcon';
 
-// Filtered transaction view. Two modes:
+// Filtered transaction view. Three modes:
 //   filter = { kind: 'category', value: 'Food & Dining' }
 //   filter = { kind: 'merchant', value: 'Chipotle Mexican Grill' }
-// Shows a summary header + (for category mode) a tappable top-merchants
-// breakdown + the full matching transaction list.
+//   filter = { kind: 'search' }  — live text input, matches name/merchant/category
 export default function TransactionsView({ data, filter, onBack, onOpenMerchant, onEditTxn }) {
   const { transactions, accounts } = data;
+  const isSearch = filter?.kind === 'search';
+  const [query, setQuery] = useState(filter?.value || '');
   const accountsById = useMemo(
     () => Object.fromEntries((accounts || []).map((a) => [a.id, a])),
     [accounts]
@@ -20,10 +21,18 @@ export default function TransactionsView({ data, filter, onBack, onOpenMerchant,
     if (filter.kind === 'category') {
       return transactions.filter((t) => (t.category || 'Other') === filter.value);
     }
+    if (filter.kind === 'search') {
+      const q = query.trim().toLowerCase();
+      if (!q) return [];
+      return transactions.filter((t) => {
+        const hay = `${t.merchant_name || ''} ${t.name || ''} ${t.category || ''} ${t.subcategory || ''}`.toLowerCase();
+        return hay.includes(q);
+      });
+    }
     return transactions.filter(
       (t) => (t.merchant_name || t.name || '').trim() === filter.value
     );
-  }, [transactions, filter]);
+  }, [transactions, filter, query]);
 
   const sorted = useMemo(
     () => [...matches].sort((a, b) => b.date.localeCompare(a.date)),
@@ -65,14 +74,28 @@ export default function TransactionsView({ data, filter, onBack, onOpenMerchant,
           >
             ← Back
           </button>
-          <div className="ph-t" style={{ fontSize: 30, display: 'flex', alignItems: 'center', gap: 10 }}>
-            {filter?.kind === 'category' && (
-              <span style={{ width: 12, height: 12, borderRadius: 4, background: accent, display: 'inline-block' }} />
-            )}
-            {title}
-          </div>
+          {isSearch ? (
+            <input
+              className="finp"
+              type="text"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Search merchant, category…"
+              autoFocus
+              style={{ marginBottom: 6, marginTop: 2 }}
+            />
+          ) : (
+            <div className="ph-t" style={{ fontSize: 30, display: 'flex', alignItems: 'center', gap: 10 }}>
+              {filter?.kind === 'category' && (
+                <span style={{ width: 12, height: 12, borderRadius: 4, background: accent, display: 'inline-block' }} />
+              )}
+              {title}
+            </div>
+          )}
           <div className="ph-s">
-            {count} transaction{count === 1 ? '' : 's'} · {money(spent)} spent
+            {isSearch && !query.trim()
+              ? 'Type to search your transactions'
+              : `${count} transaction${count === 1 ? '' : 's'} · ${money(spent)} spent`}
           </div>
         </div>
       </header>
@@ -103,10 +126,12 @@ export default function TransactionsView({ data, filter, onBack, onOpenMerchant,
       )}
 
       <div className="card">
-        <div className="ctitle">All ({count})</div>
+        <div className="ctitle">{isSearch ? 'Results' : 'All'} ({count})</div>
         {sorted.length === 0 ? (
           <div style={{ fontSize: 12, color: 'var(--t3)', lineHeight: 1.7, padding: '4px 0' }}>
-            No transactions here.
+            {isSearch
+              ? (query.trim() ? `No transactions match "${query.trim()}".` : 'Start typing to find transactions.')
+              : 'No transactions here.'}
           </div>
         ) : (
           sorted.map((t) => {
