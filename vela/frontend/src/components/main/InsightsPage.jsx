@@ -4,7 +4,6 @@ import { colorFor } from './categoryColors';
 import { deriveForMonth } from '../../hooks/useFinancialData';
 import MonthSwitcher from './MonthSwitcher';
 import TxnIcon from './TxnIcon';
-import CashFlowSankey from './CashFlowSankey';
 import { detectSubscriptions } from './detectSubscriptions';
 
 export default function InsightsPage({ data, onOpenCategory, onOpenMerchant, onOpenSubscriptions }) {
@@ -87,16 +86,6 @@ export default function InsightsPage({ data, onOpenCategory, onOpenMerchant, onO
             </div>
           </div>
         </div>
-      </div>
-
-      {/* Cash flow */}
-      <div className="card">
-        <div className="ctitle">Cash Flow · {view.label}</div>
-        <CashFlowSankey
-          income={view.monthIncome}
-          byCategory={view.byCategory}
-          remaining={view.monthRemaining}
-        />
       </div>
 
       {/* Recurring / subscriptions */}
