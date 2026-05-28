@@ -9,5 +9,15 @@ export const PRO_PRICE_LABEL = '$9.99/mo or $79/yr';
 
 export function isPro(profile) {
   if (!PAYWALL_ENABLED) return true;
+  // Dev-only preview override: lets you see the non-Pro / paywall experience
+  // without touching the database. In the browser console run
+  //   localStorage.setItem('vela:forceFree', '1')   // then refresh
+  // and to restore Pro:
+  //   localStorage.removeItem('vela:forceFree')      // then refresh
+  if (import.meta.env.DEV) {
+    try {
+      if (localStorage.getItem('vela:forceFree') === '1') return false;
+    } catch { /* private mode — ignore */ }
+  }
   return profile?.plan === 'pro';
 }

@@ -149,6 +149,7 @@ export default function App() {
       <>
         {banner}
         <Paywall onUnlocked={() => loadProfile(session)} />
+        <DevPlanToggle />
       </>
     );
   }
@@ -157,7 +158,47 @@ export default function App() {
     <>
       {banner}
       <MainApp session={session} />
+      <DevPlanToggle />
     </>
+  );
+}
+
+// Dev-only floating button to preview the Free/paywall vs. Pro experience
+// without touching the database. Renders nothing in the production build.
+function DevPlanToggle() {
+  if (!import.meta.env.DEV) return null;
+  let forcedFree = false;
+  try { forcedFree = localStorage.getItem('vela:forceFree') === '1'; } catch { /* ignore */ }
+  const toggle = () => {
+    try {
+      if (forcedFree) localStorage.removeItem('vela:forceFree');
+      else localStorage.setItem('vela:forceFree', '1');
+    } catch { /* ignore */ }
+    window.location.reload();
+  };
+  return (
+    <button
+      onClick={toggle}
+      style={{
+        position: 'fixed',
+        bottom: 16,
+        right: 16,
+        zIndex: 9999,
+        padding: '8px 12px',
+        borderRadius: 8,
+        border: '1px solid var(--accent)',
+        background: 'rgba(0,0,0,0.75)',
+        color: 'var(--t1)',
+        fontFamily: 'var(--mono)',
+        fontSize: 10,
+        letterSpacing: 1,
+        textTransform: 'uppercase',
+        cursor: 'pointer',
+        backdropFilter: 'blur(6px)',
+      }}
+    >
+      Dev · previewing {forcedFree ? 'Free' : 'Pro'} · tap to switch
+    </button>
   );
 }
 
