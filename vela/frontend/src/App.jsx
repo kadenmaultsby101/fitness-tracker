@@ -3,6 +3,8 @@ import { supabase } from './lib/supabase';
 import AuthScreen from './components/AuthScreen';
 import Onboarding from './components/Onboarding';
 import MainApp from './components/main/MainApp';
+import Paywall from './components/Paywall';
+import { PAYWALL_ENABLED, isPro } from './lib/plan';
 
 // If boot takes longer than this, surface what failed instead of hanging on
 // the splash forever. Supabase requests usually complete in <500ms.
@@ -28,7 +30,7 @@ export default function App() {
     try {
       const { data, error } = await supabase
         .from('profiles')
-        .select('id, name, monthly_income, onboarding_completed_at')
+        .select('id, name, monthly_income, onboarding_completed_at, plan')
         .eq('id', s.user.id)
         .maybeSingle();
       if (error) {
@@ -139,6 +141,18 @@ export default function App() {
       </>
     );
   }
+
+  // No free tier — onboarded users must be on a paid/trial/comp plan to use
+  // the app. Otherwise show the paywall (start trial / subscribe / redeem).
+  if (PAYWALL_ENABLED && !isPro(profile)) {
+    return (
+      <>
+        {banner}
+        <Paywall onUnlocked={() => loadProfile(session)} />
+      </>
+    );
+  }
+
   return (
     <>
       {banner}

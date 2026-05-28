@@ -48,6 +48,8 @@ export default async function handler(req, res) {
       success_url: `${origin}/?upgraded=1`,
       cancel_url: `${origin}/`,
       allow_promotion_codes: true,
+      // 7-day free trial — card collected up front, charged when the trial ends.
+      subscription_data: { trial_period_days: 7 },
     });
 
     return res.status(200).json({ url: sessionObj.url });
