@@ -3,7 +3,7 @@ import { supabaseAdmin } from './auth.js';
 // Master switch, mirrors src/lib/plan.js. While false, everyone is Pro
 // (no charging, nothing gated) — friends-and-family testing. Flip to true
 // (and set STRIPE_* env vars) to enforce the paywall at launch.
-export const PAYWALL_ENABLED = false;
+export const PAYWALL_ENABLED = true;
 
 // Sage daily message caps by plan.
 export const SAGE_LIMITS = { free: 5, pro: 50 };
