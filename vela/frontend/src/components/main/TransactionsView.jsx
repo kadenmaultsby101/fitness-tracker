@@ -3,12 +3,30 @@ import { money, moneyAbs, relDate, displayAccountName } from './format';
 import { colorFor } from './categoryColors';
 import TxnIcon from './TxnIcon';
 
+// A transaction is a "transfer" (not a real expense or income) when it
+// represents money moving between your own accounts — paying down a credit
+// card, paying a loan, transferring between checking and savings. Plaid sends
+// these as paired transactions on both sides; without filtering they double-
+// count and a credit-card paydown looks like income.
+function isTransferOrPaydown(t, account) {
+  if (!account) return false;
+  const amt = Number(t.amount);
+  // On credit/loan accounts, a negative amount is a payment received or a
+  // refund — never income.
+  if ((account.type === 'credit' || account.type === 'loan') && amt < 0) return true;
+  // Name-based detection for the depository side of a credit-card payment.
+  const name = `${t.merchant_name || ''} ${t.name || ''}`.toLowerCase();
+  if (/(\bpayment\b|\bpmt\b|autopay|e-?pay).*(card|credit|amex|chase|discover|visa|capital one|citi)/.test(name)) return true;
+  if (/(amex|chase|discover|visa|capital one|citi).*(payment|pmt|autopay)/.test(name)) return true;
+  return false;
+}
+
 // Quick-filter chips shown above the list when in 'all' / 'search' mode.
-// Each entry knows how to test a transaction. 'all' is the default no-op.
+// Each entry tests a (transaction, account) pair. 'all' is the default no-op.
 const QUICK_FILTERS = [
   { id: 'all',        label: 'All',          test: () => true },
-  { id: 'expenses',   label: 'Expenses',     test: (t) => Number(t.amount) > 0 },
-  { id: 'income',     label: 'Income',       test: (t) => Number(t.amount) < 0 },
+  { id: 'expenses',   label: 'Expenses',     test: (t, a) => Number(t.amount) > 0 && !isTransferOrPaydown(t, a) },
+  { id: 'income',     label: 'Income',       test: (t, a) => Number(t.amount) < 0 && !isTransferOrPaydown(t, a) },
   { id: 'this_month', label: 'This month',   test: (t) => sameMonth(t.date, new Date()) },
   { id: 'last_30',    label: 'Last 30 days', test: (t) => withinDays(t.date, 30) },
 ];
@@ -52,8 +70,8 @@ export default function TransactionsView({ data, filter, onBack, onOpenMerchant,
   // Apply the quick-filter chip on top of the kind-of-filter matches.
   const quickFn = (QUICK_FILTERS.find((f) => f.id === quick) || QUICK_FILTERS[0]).test;
   const filtered = useMemo(
-    () => (showChips ? matches.filter(quickFn) : matches),
-    [matches, showChips, quickFn]
+    () => (showChips ? matches.filter((t) => quickFn(t, accountsById[t.account_id])) : matches),
+    [matches, showChips, quickFn, accountsById]
   );
 
   const sorted = useMemo(
@@ -62,6 +80,8 @@ export default function TransactionsView({ data, filter, onBack, onOpenMerchant,
   );
 
   // Group sorted txns by date string for day-grouped rendering.
+  // dayTotal excludes transfers/paydowns so a credit-card payment doesn't
+  // wreck the day's "net spend" number.
   const groupedByDay = useMemo(() => {
     const groups = [];
     let current = null;
@@ -71,14 +91,18 @@ export default function TransactionsView({ data, filter, onBack, onOpenMerchant,
         groups.push(current);
       }
       current.txns.push(t);
-      // dayTotal = expenses minus income (positive = net spend that day).
-      current.dayTotal += Number(t.amount) || 0;
+      if (!isTransferOrPaydown(t, accountsById[t.account_id])) {
+        current.dayTotal += Number(t.amount) || 0;
+      }
     }
     return groups;
-  }, [sorted]);
+  }, [sorted, accountsById]);
 
-  // Header summary numbers (across the filtered set).
-  const spent = filtered.reduce((s, t) => s + (Number(t.amount) > 0 ? Number(t.amount) : 0), 0);
+  // Header summary numbers — only real expenses count toward "spent."
+  const spent = filtered.reduce((s, t) => {
+    if (isTransferOrPaydown(t, accountsById[t.account_id])) return s;
+    return s + (Number(t.amount) > 0 ? Number(t.amount) : 0);
+  }, 0);
   const count = filtered.length;
 
   // For category mode: group by merchant for a tappable breakdown.
@@ -217,13 +241,14 @@ export default function TransactionsView({ data, filter, onBack, onOpenMerchant,
                 borderTop: '1px solid var(--b1)',
               }}>
                 <div style={{
-                  fontFamily: 'var(--serif)', fontSize: 15, fontWeight: 400,
-                  color: 'var(--t1)', letterSpacing: '-0.2px',
+                  fontFamily: 'var(--serif)', fontSize: 21, fontWeight: 400,
+                  color: 'var(--t1)', letterSpacing: '-0.3px',
                 }}>
                   {relDate(g.date)}
                 </div>
                 <div style={{
-                  fontSize: 10, letterSpacing: 1.5, textTransform: 'uppercase',
+                  fontSize: 12, letterSpacing: 1.2, textTransform: 'uppercase',
+                  fontWeight: 500,
                   color: g.dayTotal > 0 ? 'var(--t2)' : 'var(--pos, #7ec39a)',
                 }}>
                   {g.dayTotal > 0 ? `−${moneyAbs(g.dayTotal)}` : g.dayTotal < 0 ? `+${moneyAbs(g.dayTotal)}` : '—'}
