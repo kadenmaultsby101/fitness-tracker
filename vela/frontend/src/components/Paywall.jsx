@@ -80,7 +80,7 @@ export default function Paywall({ onUnlocked }) {
   };
 
   return (
-    <div style={{ minHeight: '100vh', background: 'radial-gradient(120% 60% at 50% 0%, rgba(139,147,255,0.16) 0%, var(--bg) 55%)', overflowY: 'auto' }}>
+    <div style={{ height: '100vh', background: 'radial-gradient(120% 60% at 50% 0%, rgba(139,147,255,0.16) 0%, var(--bg) 55%)', overflowY: 'auto' }}>
       <div style={{ maxWidth: 460, margin: '0 auto', padding: '48px 22px 40px' }}>
         <div style={{ textAlign: 'center', marginBottom: 8 }}>
           <div style={{ fontFamily: 'var(--serif)', fontSize: 44, fontWeight: 400, letterSpacing: -2 }}>Vela</div>
