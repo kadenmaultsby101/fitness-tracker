@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { detectSuspicious } from './detectSuspicious';
 import TxnIcon from './TxnIcon';
 import { moneyAbs, relDate } from './format';
@@ -6,11 +6,12 @@ import { moneyAbs, relDate } from './format';
 // Surface "something off?" flags from transactions on Home.
 // Hidden when there's nothing to flag — no zero-state spam.
 export default function SuspiciousCard({ transactions, onOpenTxn }) {
+  const [expanded, setExpanded] = useState(false);
   const flags = useMemo(() => detectSuspicious(transactions || []), [transactions]);
   if (!flags.length) return null;
 
-  // Cap at 3 so the card stays a card, not a wall.
-  const visible = flags.slice(0, 3);
+  // Cap at 3 by default so the card stays a card. Expand on tap.
+  const visible = expanded ? flags : flags.slice(0, 3);
   const hidden = flags.length - visible.length;
 
   return (
@@ -46,10 +47,19 @@ export default function SuspiciousCard({ transactions, onOpenTxn }) {
           </div>
         </div>
       ))}
-      {hidden > 0 && (
-        <div style={{ fontSize: 10, letterSpacing: 1.5, textTransform: 'uppercase', color: 'var(--t3)', textAlign: 'center', padding: '8px 0 2px' }}>
-          + {hidden} more
-        </div>
+      {(hidden > 0 || expanded) && (
+        <button
+          type="button"
+          onClick={() => setExpanded((v) => !v)}
+          style={{
+            background: 'none', border: 'none', cursor: 'pointer',
+            width: '100%', padding: '10px 0 2px',
+            fontSize: 10, letterSpacing: 1.5, textTransform: 'uppercase',
+            color: 'var(--t2)',
+          }}
+        >
+          {expanded ? 'Show less' : `+ ${hidden} more`}
+        </button>
       )}
     </div>
   );
