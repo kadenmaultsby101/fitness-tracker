@@ -255,8 +255,9 @@ export default function TransactionsView({ data, filter, onBack, onOpenMerchant,
                 </div>
               </div>
               {g.txns.map((t) => {
-                const cat = t.category || 'Other';
                 const acc = accountsById[t.account_id];
+                const transfer = isTransferOrPaydown(t, acc);
+                const cat = transfer ? 'Transfer' : (t.category || 'Other');
                 return (
                   <div
                     key={t.id}
@@ -268,7 +269,7 @@ export default function TransactionsView({ data, filter, onBack, onOpenMerchant,
                   >
                     <TxnIcon txn={t} />
                     <div className="txn-bd">
-                      <div className="txn-nm">{t.merchant_name || t.name}</div>
+                      <div className="txn-nm">{prettyName(t, transfer)}</div>
                       <div className="txn-ct" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                         <span style={{
                           width: 7, height: 7, borderRadius: '50%',
@@ -303,6 +304,43 @@ export default function TransactionsView({ data, filter, onBack, onOpenMerchant,
 }
 
 // --- helpers ---
+
+// Make the row name human-readable. Plaid sometimes returns raw bank-feed
+// strings like "ORIG CO NAME:DISCOVER CO ENTRY DESCR:E-PAYMENT…". For
+// detected transfers we hard-label the row by the issuer; otherwise we strip
+// known noise prefixes from the raw name and keep the merchant_name as-is.
+function prettyName(t, isTransfer) {
+  const raw = (t.merchant_name || t.name || '').trim();
+  if (isTransfer) {
+    const issuer = detectIssuer(raw);
+    return issuer ? `${issuer} Payment` : 'Credit Card Payment';
+  }
+  if (!t.merchant_name) {
+    // Only clean the noisy raw `name` — merchant_name from Plaid is already nice.
+    return raw
+      .replace(/\bORIG\s+CO\s+NAME:?/i, '')
+      .replace(/\bCO\s+ENTRY\s+DESCR:?/i, '')
+      .replace(/\bDESCR:?/i, '')
+      .replace(/\bENTRY:?/i, '')
+      .replace(/\s{2,}/g, ' ')
+      .trim()
+      || raw;
+  }
+  return raw;
+}
+
+function detectIssuer(name) {
+  const n = name.toLowerCase();
+  if (/discover/.test(n)) return 'Discover';
+  if (/\bamex\b|american express/.test(n)) return 'Amex';
+  if (/chase/.test(n)) return 'Chase';
+  if (/capital\s*one/.test(n)) return 'Capital One';
+  if (/citi/.test(n)) return 'Citi';
+  if (/visa/.test(n)) return 'Visa';
+  if (/mastercard|master\s*card/.test(n)) return 'Mastercard';
+  if (/robinhood/.test(n)) return 'Robinhood';
+  return null;
+}
 
 function sameMonth(iso, now) {
   if (!iso) return false;
