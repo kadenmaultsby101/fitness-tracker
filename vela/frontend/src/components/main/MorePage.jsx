@@ -7,7 +7,7 @@ import BankLogo from './BankLogo';
 import FeedbackCard from './FeedbackCard';
 import UpgradeCard from './UpgradeCard';
 import { groupAccounts } from './accountGroups';
-import { isPro, PAYWALL_ENABLED } from '../../lib/plan';
+import { isPro, PAYWALL_ENABLED, ADMIN_EMAIL } from '../../lib/plan';
 
 const SETTINGS_KEYS = [
   { col: 'notify_transactions',   lbl: 'Transaction Alerts',   sub: 'Notify on every transaction' },
@@ -40,6 +40,8 @@ export default function MorePage({ data, session, onSignOut, onOpenAccount }) {
   const [deleteState, setDeleteState] = useState('idle');
   const [deleteConfirmText, setDeleteConfirmText] = useState('');
   const [deleteError, setDeleteError] = useState('');
+
+  const [confirmingSignOut, setConfirmingSignOut] = useState(false);
 
   const [portalBusy, setPortalBusy] = useState(false);
   const openBillingPortal = async () => {
@@ -97,7 +99,7 @@ export default function MorePage({ data, session, onSignOut, onOpenAccount }) {
 
       // Sign out (clears the auth token from localStorage) then reload
       // back to the auth screen.
-      await supabase.auth.signOut();
+      await supabase.auth.signOut({ scope: 'local' });
       window.location.replace('/');
     } catch (err) {
       console.error('[account-delete]', err);
@@ -210,6 +212,19 @@ export default function MorePage({ data, session, onSignOut, onOpenAccount }) {
           <button type="button" className="bsec" style={{ width: '100%' }} onClick={openBillingPortal} disabled={portalBusy}>
             {portalBusy ? 'Opening…' : 'Manage subscription'}
           </button>
+          {session?.user?.email === ADMIN_EMAIL && (
+            <button
+              type="button"
+              className="bsec"
+              style={{ width: '100%', marginTop: 8, fontSize: 10, letterSpacing: 1.5, textTransform: 'uppercase', color: 'var(--t3)' }}
+              onClick={() => {
+                try { localStorage.setItem('vela:forceFree', '1'); } catch { /* private mode */ }
+                window.location.replace('/');
+              }}
+            >
+              Preview Free view (admin)
+            </button>
+          )}
         </div>
       )}
 
@@ -494,9 +509,25 @@ export default function MorePage({ data, session, onSignOut, onOpenAccount }) {
       </div>
 
       <div style={{ padding: '14px 14px 40px' }}>
-        <button type="button" className="bsec" style={{ width: '100%' }} onClick={onSignOut}>
-          Sign Out
-        </button>
+        {!confirmingSignOut ? (
+          <button type="button" className="bsec" style={{ width: '100%' }} onClick={() => setConfirmingSignOut(true)}>
+            Sign Out
+          </button>
+        ) : (
+          <>
+            <div className="mnote" style={{ marginBottom: 12, textAlign: 'center' }}>
+              Are you sure you want to sign out?
+            </div>
+            <div className="mbtns">
+              <button type="button" className="bsec" onClick={() => setConfirmingSignOut(false)}>
+                Cancel
+              </button>
+              <button type="button" className="bdel" style={{ flex: 1, marginTop: 0 }} onClick={onSignOut}>
+                Sign out
+              </button>
+            </div>
+          </>
+        )}
       </div>
     </>
   );

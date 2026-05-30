@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { supabase } from '../../lib/supabase';
+import { supabase, signOut } from '../../lib/supabase';
 import { API, BACKEND_AVAILABLE } from '../../lib/apiUrl';
 import { useFinancialData } from '../../hooks/useFinancialData';
 import { usePullToRefresh } from '../../hooks/usePullToRefresh';
@@ -199,7 +199,7 @@ export default function MainApp({ session }) {
       <MorePage
         data={data}
         session={session}
-        onSignOut={() => supabase.auth.signOut()}
+        onSignOut={signOut}
         onOpenAccount={openAccount}
       />
     );

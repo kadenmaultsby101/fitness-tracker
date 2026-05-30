@@ -44,3 +44,19 @@ export const supabase = createClient(url, key, {
     storage: typeof window !== 'undefined' ? window.localStorage : undefined,
   },
 });
+
+// Robust sign-out. The default global sign-out makes a server round-trip to
+// revoke the session; if that request fails (offline, already-expired token,
+// 403) supabase-js can throw and leave the local session in place, so the
+// user appears "stuck" signed in. Scope 'local' clears the stored session
+// without that dependency, and we hard-redirect in `finally` so the UI always
+// resets to the auth screen no matter what.
+export async function signOut() {
+  try {
+    await supabase.auth.signOut({ scope: 'local' });
+  } catch (err) {
+    console.error('[vela] signOut failed; clearing session locally anyway', err);
+  } finally {
+    if (typeof window !== 'undefined') window.location.replace('/');
+  }
+}

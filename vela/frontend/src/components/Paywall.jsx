@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { supabase } from '../lib/supabase';
+import { supabase, signOut } from '../lib/supabase';
 import { API } from '../lib/apiUrl';
 import { SageIcon, InsightsIcon, AccountsIcon, RecurringIcon } from './main/NavIcons';
 
@@ -133,8 +133,25 @@ export default function Paywall({ onUnlocked }) {
               </button>
             </div>
           )}
-          <div style={{ marginTop: 16 }}>
-            <button type="button" onClick={() => supabase.auth.signOut()} style={{ background: 'none', border: 'none', color: 'var(--t3)', fontSize: 10, letterSpacing: 2, textTransform: 'uppercase', cursor: 'pointer' }}>
+          <div style={{ marginTop: 16, display: 'flex', flexDirection: 'column', gap: 10, alignItems: 'center' }}>
+            {(() => {
+              let forced = false;
+              try { forced = localStorage.getItem('vela:forceFree') === '1'; } catch { /* ignore */ }
+              if (!forced) return null;
+              return (
+                <button
+                  type="button"
+                  onClick={() => {
+                    try { localStorage.removeItem('vela:forceFree'); } catch { /* ignore */ }
+                    window.location.replace('/');
+                  }}
+                  style={{ background: 'none', border: '1px solid var(--b2)', borderRadius: 20, padding: '6px 14px', color: 'var(--t2)', fontSize: 10, letterSpacing: 2, textTransform: 'uppercase', cursor: 'pointer' }}
+                >
+                  Restore Pro view
+                </button>
+              );
+            })()}
+            <button type="button" onClick={signOut} style={{ background: 'none', border: 'none', color: 'var(--t3)', fontSize: 10, letterSpacing: 2, textTransform: 'uppercase', cursor: 'pointer' }}>
               Sign out
             </button>
           </div>
