@@ -44,21 +44,36 @@ export default function MorePage({ data, session, onSignOut, onOpenAccount }) {
   const [confirmingSignOut, setConfirmingSignOut] = useState(false);
 
   const [portalBusy, setPortalBusy] = useState(false);
+  const [portalError, setPortalError] = useState('');
   const openBillingPortal = async () => {
     if (portalBusy) return;
     setPortalBusy(true);
+    setPortalError('');
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 10000);
     try {
       const { data: sess } = await supabase.auth.getSession();
       const token = sess.session?.access_token;
       const res = await fetch(`${API}/api/stripe/portal`, {
         method: 'POST',
         headers: { Authorization: `Bearer ${token}` },
+        signal: controller.signal,
       });
       const body = await res.json().catch(() => ({}));
-      if (res.ok && body.url) window.location.href = body.url;
-      else setPortalBusy(false);
-    } catch {
+      if (res.ok && body.url) {
+        window.location.href = body.url;
+        return; // keep busy=true during the redirect
+      }
+      setPortalError(body.error || `Couldn't open billing portal (HTTP ${res.status}).`);
       setPortalBusy(false);
+    } catch (err) {
+      const msg = err?.name === 'AbortError'
+        ? 'Billing portal took too long to respond. Try again.'
+        : (err?.message || 'Network error. Check your connection and try again.');
+      setPortalError(msg);
+      setPortalBusy(false);
+    } finally {
+      clearTimeout(timeoutId);
     }
   };
 
@@ -212,6 +227,7 @@ export default function MorePage({ data, session, onSignOut, onOpenAccount }) {
           <button type="button" className="bsec" style={{ width: '100%' }} onClick={openBillingPortal} disabled={portalBusy}>
             {portalBusy ? 'Opening…' : 'Manage subscription'}
           </button>
+          {portalError && <div className="merr" style={{ marginTop: 8 }}>{portalError}</div>}
           {session?.user?.email === ADMIN_EMAIL && (
             <button
               type="button"
