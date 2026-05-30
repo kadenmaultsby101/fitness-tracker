@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import { money, moneyAbs, relDate, displayAccountName } from './format';
 import { colorFor } from './categoryColors';
 import TxnIcon from './TxnIcon';
+import { detectSuspicious, flaggedIdSet } from './detectSuspicious';
 
 // A transaction is a "transfer" (not a real expense or income) when it
 // represents money moving between your own accounts — paying down a credit
@@ -48,6 +49,11 @@ export default function TransactionsView({ data, filter, onBack, onOpenMerchant,
     () => Object.fromEntries((accounts || []).map((a) => [a.id, a])),
     [accounts]
   );
+
+  // Flagged-transaction lookup for the ⚠ badge. Computed against the full
+  // transactions set so the badge stays consistent across category / search
+  // pages, not just the main Transactions tab.
+  const flagsById = useMemo(() => flaggedIdSet(detectSuspicious(transactions || [])), [transactions]);
 
   const matches = useMemo(() => {
     if (!filter) return [];
@@ -269,7 +275,17 @@ export default function TransactionsView({ data, filter, onBack, onOpenMerchant,
                   >
                     <TxnIcon txn={t} />
                     <div className="txn-bd">
-                      <div className="txn-nm">{prettyName(t, transfer)}</div>
+                      <div className="txn-nm" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                        {flagsById.has(t.id) && (
+                          <span
+                            title="Vela flagged this — possible duplicate or unusually large."
+                            style={{ color: 'var(--red, #eb9f9f)', fontSize: 12, flexShrink: 0 }}
+                          >
+                            ⚠
+                          </span>
+                        )}
+                        {prettyName(t, transfer)}
+                      </div>
                       <div className="txn-ct" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                         <span style={{
                           width: 7, height: 7, borderRadius: '50%',
