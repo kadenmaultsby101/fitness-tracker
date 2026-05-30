@@ -27,11 +27,18 @@ function daysBetween(isoA, isoB) {
   return Math.abs(a - b) / 86400000;
 }
 
-const MIN_DUPLICATE_AMOUNT = 5;
-const DUPLICATE_WINDOW_DAYS = 2;       // within 48 hours
-const MIN_LARGE_AMOUNT = 20;
-const LARGE_MULTIPLE = 3;              // ≥ 3× median
-const MIN_HISTORY_FOR_LARGE = 5;       // need 5+ prior charges to baseline
+function hoursBetween(isoA, isoB) {
+  return daysBetween(isoA, isoB) * 24;
+}
+
+// Tuned to avoid food/coffee noise. Buying lunch AND dinner at the same
+// place for the same amount is normal; a POS-glitch duplicate fires within
+// minutes-to-hours and tends to be on a non-trivial charge.
+const MIN_DUPLICATE_AMOUNT = 15;       // skip cheap-coffee noise
+const DUPLICATE_WINDOW_HOURS = 6;      // a real glitch is hours, not days
+const MIN_LARGE_AMOUNT = 25;
+const LARGE_MULTIPLE = 4;              // ≥ 4× median (was 3×, too noisy)
+const MIN_HISTORY_FOR_LARGE = 8;       // need 8+ prior charges to baseline
 const ONLY_FLAG_LAST_DAYS = 30;        // don't pester about old stuff
 
 export function detectSuspicious(transactions = []) {
@@ -63,15 +70,17 @@ export function detectSuspicious(transactions = []) {
       for (let j = i + 1; j < txns.length; j++) {
         const b = txns[j];
         if (Math.round(Number(a.amount) * 100) !== Math.round(Number(b.amount) * 100)) continue;
-        if (daysBetween(a.date, b.date) > DUPLICATE_WINDOW_DAYS) continue;
+        const hours = hoursBetween(a.date, b.date);
+        if (hours > DUPLICATE_WINDOW_HOURS) continue;
         // Flag the more recent one as the duplicate of the older one.
         const [older, newer] = a.date <= b.date ? [a, b] : [b, a];
         if (seen.has(newer.id)) continue;
         seen.add(newer.id);
+        const hrsLabel = hours < 1 ? 'minutes' : `${Math.round(hours)}h`;
         flagged.push({
           txn: newer,
           reason: 'duplicate',
-          message: `Same charge twice in ${Math.round(daysBetween(older.date, newer.date)) || '<24'}h — possible duplicate.`,
+          message: `Same charge ${hrsLabel === 'minutes' ? 'minutes' : 'within ' + hrsLabel} apart — possible duplicate.`,
           severity: 'warn',
           related: older.id,
         });

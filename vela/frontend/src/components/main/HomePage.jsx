@@ -87,11 +87,6 @@ export default function HomePage({ data, session, onAddTxn, onOpenAccount, onOpe
         onGoTo={onGoTo}
       />
 
-      <SuspiciousCard
-        transactions={transactions}
-        onOpenTxn={onEditTxn}
-      />
-
       <div className="nw">
         <div className="nw-lbl">Total Net Worth</div>
         <div className="nw-amt">
@@ -118,6 +113,11 @@ export default function HomePage({ data, session, onAddTxn, onOpenAccount, onOpe
           </span>
         </div>
       </div>
+
+      <SuspiciousCard
+        transactions={transactions}
+        onOpenTxn={onEditTxn}
+      />
 
       {showChecklist && !loading && (
         <div className="card" style={{ borderColor: 'var(--b2)' }}>
