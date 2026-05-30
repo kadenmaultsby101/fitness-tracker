@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { supabase } from '../lib/supabase';
 import { withTimeout } from '../lib/withTimeout';
+import { isTransferOrPaydown } from '../components/main/txnPretty';
 
 const currentMonthYear = () => {
   const d = new Date();
@@ -212,6 +213,7 @@ function derive({ accounts, transactions }) {
 function deriveInWindow(accounts, transactions, start, end) {
   const netWorth = accounts.reduce((s, a) => s + signedBalance(a), 0);
   const inMonth = transactions.filter((t) => t.date >= start && t.date < end);
+  const accountsById = Object.fromEntries((accounts || []).map((a) => [a.id, a]));
 
   const isInvestment = (t) => {
     const cat = (t.category || '').toLowerCase();
@@ -226,6 +228,9 @@ function deriveInWindow(accounts, transactions, start, end) {
 
   for (const t of inMonth) {
     const amt = Number(t.amount) || 0;
+    // Credit-card paydowns / inter-account transfers shouldn't count as
+    // income OR spending — both sides cancel out in real life.
+    if (isTransferOrPaydown(t, accountsById[t.account_id])) continue;
     if (amt < 0) {
       monthIncome += Math.abs(amt);
       continue;
