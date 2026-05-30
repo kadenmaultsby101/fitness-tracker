@@ -135,81 +135,6 @@ export default function HomePage({ data, session, onAddTxn, onOpenAccount, onOpe
         )}
       />
 
-      <div className="slbl">
-        <span>Accounts</span>
-      </div>
-      {!hasAccounts && !loading && error ? (
-        <div className="empty" style={{ borderColor: 'rgba(235,159,159,0.30)' }}>
-          <div className="empty-title" style={{ color: 'var(--red)' }}>Couldn't load accounts</div>
-          {error}
-          <button
-            type="button"
-            className="bsec"
-            style={{ width: '100%', marginTop: 10 }}
-            onClick={() => data.refresh()}
-          >
-            Retry
-          </button>
-        </div>
-      ) : !hasAccounts && !loading ? (
-        <div className="empty">
-          <div className="empty-title">No accounts yet</div>
-          Connect a bank from <strong style={{ color: 'var(--t1)' }}>More</strong> — Plaid syncs balances and transactions automatically.
-        </div>
-      ) : loading ? (
-        <SkeletonAccounts />
-      ) : (
-        groupAccounts(accounts).map((section) => (
-          <div key={section.group} style={{ marginBottom: 6 }}>
-            <div style={{
-              display: 'flex', justifyContent: 'space-between', alignItems: 'baseline',
-              padding: '4px 14px 6px',
-              fontSize: 9, letterSpacing: 2, textTransform: 'uppercase', color: 'var(--t3)',
-            }}>
-              <span>{section.group}</span>
-              <span style={{ color: section.isDebt ? 'var(--red)' : 'var(--t2)', fontVariantNumeric: 'tabular-nums' }}>
-                {section.isDebt ? '−' : ''}{money(Math.abs(section.subtotal))}
-              </span>
-            </div>
-            <div className="acc-scr">
-              {section.accounts.map((a) => {
-                const isDebt = a.type === 'credit' || a.type === 'loan';
-                const bal = Number(a.balance_current) || 0;
-                const item = itemsById[a.plaid_item_id];
-                const accent = item?.institution_color;
-                return (
-                  <div
-                    key={a.id}
-                    className="am"
-                    onClick={() => onOpenAccount?.(a)}
-                    role="button"
-                    tabIndex={0}
-                    style={{
-                      cursor: onOpenAccount ? 'pointer' : 'default',
-                      borderTop: accent ? `2px solid ${accent}` : undefined,
-                    }}
-                  >
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
-                      <BankLogo item={item} size={22} fallbackName={a.name} />
-                      <div className="am-inst" style={{ margin: 0 }}>
-                        {item?.institution_name || a.subtype || a.type}
-                      </div>
-                    </div>
-                    <div className="am-nm">
-                      {displayAccountName(a)}
-                      {a.mask ? ` ··${a.mask}` : ''}
-                    </div>
-                    <div className="am-bal" style={isDebt ? { color: 'var(--red)' } : undefined}>
-                      {isDebt ? '−' : ''}{money(bal)}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        ))
-      )}
-
       <div className="card">
         <div className="ctitle">
           <span>This Week's Transactions</span>
@@ -346,6 +271,81 @@ export default function HomePage({ data, session, onAddTxn, onOpenAccount, onOpe
             </button>
           ))}
         </div>
+      )}
+
+      <div className="slbl">
+        <span>Accounts</span>
+      </div>
+      {!hasAccounts && !loading && error ? (
+        <div className="empty" style={{ borderColor: 'rgba(235,159,159,0.30)' }}>
+          <div className="empty-title" style={{ color: 'var(--red)' }}>Couldn't load accounts</div>
+          {error}
+          <button
+            type="button"
+            className="bsec"
+            style={{ width: '100%', marginTop: 10 }}
+            onClick={() => data.refresh()}
+          >
+            Retry
+          </button>
+        </div>
+      ) : !hasAccounts && !loading ? (
+        <div className="empty">
+          <div className="empty-title">No accounts yet</div>
+          Connect a bank from <strong style={{ color: 'var(--t1)' }}>More</strong> — Plaid syncs balances and transactions automatically.
+        </div>
+      ) : loading ? (
+        <SkeletonAccounts />
+      ) : (
+        groupAccounts(accounts).map((section) => (
+          <div key={section.group} style={{ marginBottom: 6 }}>
+            <div style={{
+              display: 'flex', justifyContent: 'space-between', alignItems: 'baseline',
+              padding: '4px 14px 6px',
+              fontSize: 9, letterSpacing: 2, textTransform: 'uppercase', color: 'var(--t3)',
+            }}>
+              <span>{section.group}</span>
+              <span style={{ color: section.isDebt ? 'var(--red)' : 'var(--t2)', fontVariantNumeric: 'tabular-nums' }}>
+                {section.isDebt ? '−' : ''}{money(Math.abs(section.subtotal))}
+              </span>
+            </div>
+            <div className="acc-scr">
+              {section.accounts.map((a) => {
+                const isDebt = a.type === 'credit' || a.type === 'loan';
+                const bal = Number(a.balance_current) || 0;
+                const item = itemsById[a.plaid_item_id];
+                const accent = item?.institution_color;
+                return (
+                  <div
+                    key={a.id}
+                    className="am"
+                    onClick={() => onOpenAccount?.(a)}
+                    role="button"
+                    tabIndex={0}
+                    style={{
+                      cursor: onOpenAccount ? 'pointer' : 'default',
+                      borderTop: accent ? `2px solid ${accent}` : undefined,
+                    }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                      <BankLogo item={item} size={22} fallbackName={a.name} />
+                      <div className="am-inst" style={{ margin: 0 }}>
+                        {item?.institution_name || a.subtype || a.type}
+                      </div>
+                    </div>
+                    <div className="am-nm">
+                      {displayAccountName(a)}
+                      {a.mask ? ` ··${a.mask}` : ''}
+                    </div>
+                    <div className="am-bal" style={isDebt ? { color: 'var(--red)' } : undefined}>
+                      {isDebt ? '−' : ''}{money(bal)}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        ))
       )}
     </>
   );
