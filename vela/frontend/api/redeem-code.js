@@ -14,10 +14,14 @@ export default async function handler(req, res) {
     const code = String(req.body?.code || '').trim().toLowerCase();
     if (!code) return res.status(400).json({ error: 'Enter a code.' });
 
-    const valid = (process.env.VELA_COMP_CODES || '')
+    // NORTHSTAR is the always-on operator comp code; never depends on env vars.
+    // Additional codes can be configured via VELA_COMP_CODES (comma-separated).
+    const builtin = ['northstar'];
+    const fromEnv = (process.env.VELA_COMP_CODES || '')
       .split(',')
       .map((c) => c.trim().toLowerCase())
       .filter(Boolean);
+    const valid = [...builtin, ...fromEnv];
 
     if (!valid.includes(code)) {
       return res.status(400).json({ error: 'That code isn\'t valid.' });
