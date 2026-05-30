@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { supabase } from './lib/supabase';
+import { withTimeout } from './lib/withTimeout';
 import AuthScreen from './components/AuthScreen';
 import Onboarding from './components/Onboarding';
 import MainApp from './components/main/MainApp';
@@ -9,6 +10,15 @@ import { PAYWALL_ENABLED, isPro } from './lib/plan';
 // If boot takes longer than this, surface what failed instead of hanging on
 // the splash forever. Supabase requests usually complete in <500ms.
 const BOOT_TIMEOUT_MS = 8000;
+// Per-call timeout for loadProfile. The supabase JS client can deadlock on
+// the second invocation of a `.select()` after a long session — without this
+// guard, the whole app silently stalls (this is what caused the NORTHSTAR
+// redeem hang).
+const PROFILE_FETCH_TIMEOUT_MS = 8000;
+// When the tab comes back to the foreground after being away this long, do
+// a quiet background refresh so the user sees current data without a
+// manual reload. Anything shorter is wasted bandwidth.
+const STALE_AFTER_HIDDEN_MS = 5 * 60 * 1000;
 
 export default function App() {
   const [session, setSession] = useState(null);
@@ -19,6 +29,7 @@ export default function App() {
   // True when this page load arrived via an email-confirmation link, so we
   // can show a brief "Email confirmed" flash (not on normal password logins).
   const confirmFromLinkRef = useRef(false);
+  const hiddenAtRef = useRef(null);
 
   const loadProfile = useCallback(async (s) => {
     if (!s) {
@@ -28,21 +39,25 @@ export default function App() {
     }
     console.info('[vela] loadProfile: fetching for', s.user.id);
     try {
-      const { data, error } = await supabase
-        .from('profiles')
-        .select('id, name, monthly_income, onboarding_completed_at, plan')
-        .eq('id', s.user.id)
-        .maybeSingle();
+      const { data, error } = await withTimeout(
+        supabase
+          .from('profiles')
+          .select('id, name, monthly_income, onboarding_completed_at, plan')
+          .eq('id', s.user.id)
+          .maybeSingle(),
+        PROFILE_FETCH_TIMEOUT_MS,
+        'profile fetch timed out',
+      );
       if (error) {
         console.error('[vela] profile fetch error', error);
-        setProfile(null);
-        return;
+        return; // leave previous profile state intact — don't trap UI
       }
       console.info('[vela] loadProfile: got', data);
       setProfile(data);
     } catch (err) {
-      console.error('[vela] profile fetch threw', err);
-      setProfile(null);
+      // Timeout or thrown error. Keep whatever profile we already had so the
+      // app continues to render — better stale data than a frozen screen.
+      console.error('[vela] profile fetch threw', err?.message || err);
     }
   }, []);
 
@@ -105,6 +120,33 @@ export default function App() {
       clearTimeout(safety);
       sub.subscription.unsubscribe();
     };
+  }, [loadProfile]);
+
+  // Quiet auto-refresh when the tab regains focus after being hidden for
+  // long enough that the data is probably stale. No spinners, no banners —
+  // just freshen profile + push a custom event other hooks can listen to
+  // for the heavy financial data refresh.
+  useEffect(() => {
+    const onVisibility = () => {
+      if (document.hidden) {
+        hiddenAtRef.current = Date.now();
+        return;
+      }
+      const hiddenAt = hiddenAtRef.current;
+      hiddenAtRef.current = null;
+      if (!hiddenAt) return;
+      const awayMs = Date.now() - hiddenAt;
+      if (awayMs < STALE_AFTER_HIDDEN_MS) return;
+      console.info('[vela] tab refocused after', Math.round(awayMs / 1000), 's — quiet refresh');
+      // Refresh profile in case plan / onboarding changed elsewhere.
+      supabase.auth.getSession().then(({ data }) => {
+        if (data?.session) loadProfile(data.session);
+      }).catch(() => { /* ignore — next interaction will retry */ });
+      // Broadcast for the financial-data hook to pick up.
+      window.dispatchEvent(new CustomEvent('vela:refocus-refresh'));
+    };
+    document.addEventListener('visibilitychange', onVisibility);
+    return () => document.removeEventListener('visibilitychange', onVisibility);
   }, [loadProfile]);
 
   if (loading) return <CenteredLabel text="Loading" />;

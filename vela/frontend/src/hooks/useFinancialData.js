@@ -138,6 +138,14 @@ export function useFinancialData() {
     load();
   }, [load]);
 
+  // Quiet refresh when the tab regains focus after being hidden long enough
+  // for the data to feel stale. App.jsx broadcasts the event; we just react.
+  useEffect(() => {
+    const onRefocus = () => load();
+    window.addEventListener('vela:refocus-refresh', onRefocus);
+    return () => window.removeEventListener('vela:refocus-refresh', onRefocus);
+  }, [load]);
+
   const derived = derive({ accounts, transactions });
 
   return {
