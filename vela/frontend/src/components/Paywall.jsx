@@ -137,12 +137,17 @@ export default function Paywall({ onUnlocked }) {
               Have an access code?
             </button>
           ) : (
-            <div style={{ display: 'flex', gap: 8 }}>
-              <input className="finp" type="text" value={code} onChange={(e) => setCode(e.target.value)} placeholder="Access code" autoFocus style={{ marginBottom: 0, flex: 1 }} />
-              <button type="button" className="bsec" style={{ flex: 'none', width: 'auto', padding: '0 18px' }} onClick={redeem} disabled={busy === 'code' || !code.trim()}>
-                {busy === 'code' ? '…' : 'Redeem'}
-              </button>
-            </div>
+            <>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <input className="finp" type="text" value={code} onChange={(e) => setCode(e.target.value)} placeholder="Access code" autoFocus disabled={busy === 'code'} style={{ marginBottom: 0, flex: 1 }} />
+                <button type="button" className="bsec" style={{ flex: 'none', width: 'auto', padding: '0 18px' }} onClick={redeem} disabled={busy === 'code' || !code.trim()}>
+                  {busy === 'code' ? '…' : 'Redeem'}
+                </button>
+              </div>
+              {error && busy !== 'checkout' && (
+                <div className="merr" style={{ marginTop: 10, textAlign: 'left' }}>{error}</div>
+              )}
+            </>
           )}
           <div style={{ marginTop: 16, display: 'flex', flexDirection: 'column', gap: 10, alignItems: 'center' }}>
             {(() => {
