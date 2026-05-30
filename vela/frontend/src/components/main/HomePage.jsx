@@ -7,6 +7,7 @@ import SageBriefings from './SageBriefings';
 import WeeklyRecap from './WeeklyRecap';
 import SuspiciousCard from './SuspiciousCard';
 import PerksCard from './PerksCard';
+import HomeGoalsCard from './HomeGoalsCard';
 import { colorFor } from './categoryColors';
 import { groupAccounts } from './accountGroups';
 import { SearchIcon } from './NavIcons';
@@ -125,80 +126,6 @@ export default function HomePage({ data, session, onAddTxn, onOpenAccount, onOpe
         transactions={transactions}
         onGoTo={onGoTo}
       />
-
-      {showChecklist && !loading && (
-        <div className="card" style={{ borderColor: 'var(--b2)' }}>
-          <div className="ctitle">
-            <span>Setup · {completed} of {required.length}</span>
-            <span style={{ color: 'var(--t2)', fontSize: 8 }}>{Math.round((completed / required.length) * 100)}%</span>
-          </div>
-          <div className="br-track" style={{ marginBottom: 14 }}>
-            <div
-              className="br-fill"
-              style={{ width: `${(completed / required.length) * 100}%` }}
-            />
-          </div>
-          {steps.map((s) => (
-            <button
-              key={s.key}
-              type="button"
-              onClick={() => {
-                if (s.key === 'goal') onGoTo('goals');
-                else if (s.key === 'budget') onGoTo('budget');
-                else if (s.key === 'plaid') onGoTo('more');
-              }}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: 12,
-                padding: '10px 0',
-                width: '100%',
-                background: 'none',
-                border: 'none',
-                color: 'inherit',
-                fontFamily: 'inherit',
-                cursor: s.done ? 'default' : 'pointer',
-                borderBottom: '1px solid var(--b1)',
-                textAlign: 'left',
-              }}
-              disabled={s.done}
-            >
-              <span
-                style={{
-                  width: 16,
-                  height: 16,
-                  border: '1px solid var(--b2)',
-                  background: s.done ? 'var(--green)' : 'transparent',
-                  color: s.done ? 'var(--bg)' : 'var(--t3)',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  fontSize: 10,
-                  flexShrink: 0,
-                }}
-                aria-hidden
-              >
-                {s.done ? '✓' : ''}
-              </span>
-              <span
-                style={{
-                  flex: 1,
-                  fontSize: 11,
-                  color: s.done ? 'var(--t3)' : 'var(--t1)',
-                  textDecoration: s.done ? 'line-through' : 'none',
-                  letterSpacing: 0.2,
-                }}
-              >
-                {s.label}
-                {s.optional && <span style={{ color: 'var(--t3)', marginLeft: 6, fontSize: 8, letterSpacing: 1.5 }}>OPTIONAL</span>}
-              </span>
-              {!s.done && (
-                <span style={{ color: 'var(--t3)', fontSize: 14 }}>→</span>
-              )}
-            </button>
-          ))}
-        </div>
-      )}
 
       <SageBriefings
         enabled={hasAccounts && profile?.notify_ai_insights !== false}
@@ -336,6 +263,82 @@ export default function HomePage({ data, session, onAddTxn, onOpenAccount, onOpe
           })
         )}
       </div>
+
+      <HomeGoalsCard goals={goals} onGoTo={onGoTo} />
+
+      {showChecklist && !loading && (
+        <div className="card" style={{ borderColor: 'var(--b2)' }}>
+          <div className="ctitle">
+            <span>Setup · {completed} of {required.length}</span>
+            <span style={{ color: 'var(--t2)', fontSize: 8 }}>{Math.round((completed / required.length) * 100)}%</span>
+          </div>
+          <div className="br-track" style={{ marginBottom: 14 }}>
+            <div
+              className="br-fill"
+              style={{ width: `${(completed / required.length) * 100}%` }}
+            />
+          </div>
+          {steps.map((s) => (
+            <button
+              key={s.key}
+              type="button"
+              onClick={() => {
+                if (s.key === 'goal') onGoTo('goals');
+                else if (s.key === 'budget') onGoTo('budget');
+                else if (s.key === 'plaid') onGoTo('more');
+              }}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 12,
+                padding: '10px 0',
+                width: '100%',
+                background: 'none',
+                border: 'none',
+                color: 'inherit',
+                fontFamily: 'inherit',
+                cursor: s.done ? 'default' : 'pointer',
+                borderBottom: '1px solid var(--b1)',
+                textAlign: 'left',
+              }}
+              disabled={s.done}
+            >
+              <span
+                style={{
+                  width: 16,
+                  height: 16,
+                  border: '1px solid var(--b2)',
+                  background: s.done ? 'var(--green)' : 'transparent',
+                  color: s.done ? 'var(--bg)' : 'var(--t3)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  fontSize: 10,
+                  flexShrink: 0,
+                }}
+                aria-hidden
+              >
+                {s.done ? '✓' : ''}
+              </span>
+              <span
+                style={{
+                  flex: 1,
+                  fontSize: 11,
+                  color: s.done ? 'var(--t3)' : 'var(--t1)',
+                  textDecoration: s.done ? 'line-through' : 'none',
+                  letterSpacing: 0.2,
+                }}
+              >
+                {s.label}
+                {s.optional && <span style={{ color: 'var(--t3)', marginLeft: 6, fontSize: 8, letterSpacing: 1.5 }}>OPTIONAL</span>}
+              </span>
+              {!s.done && (
+                <span style={{ color: 'var(--t3)', fontSize: 14 }}>→</span>
+              )}
+            </button>
+          ))}
+        </div>
+      )}
     </>
   );
 }
