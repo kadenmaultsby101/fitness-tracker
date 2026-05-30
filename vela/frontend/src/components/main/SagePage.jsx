@@ -88,6 +88,8 @@ export default function SagePage({ data, session }) {
     const optimistic = { id: `local-u-${Date.now()}`, role: 'user', content: text };
     setMessages((m) => [...m, optimistic]);
 
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 45000);
     try {
       const { data: sess } = await supabase.auth.getSession();
       const token = sess.session?.access_token;
@@ -102,6 +104,7 @@ export default function SagePage({ data, session }) {
           Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify({ message: text, history: historyPayload }),
+        signal: controller.signal,
       });
       const body = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(body.error || `HTTP ${res.status}`);
@@ -112,12 +115,15 @@ export default function SagePage({ data, session }) {
       ]);
     } catch (err) {
       console.error('[vela] Sage send failed', err);
+      const friendly = err?.name === 'AbortError'
+        ? 'That took too long. Sage might be thinking hard — try again.'
+        : `Hit an error: **${err.message}**. Try again.`;
       setMessages((m) => [
         ...m,
-        { id: `local-err-${Date.now()}`, role: 'assistant',
-          content: `Hit an error: **${err.message}**. Try again — Render may be waking if idle.` },
+        { id: `local-err-${Date.now()}`, role: 'assistant', content: friendly },
       ]);
     } finally {
+      clearTimeout(timeoutId);
       setSending(false);
     }
   }, [input, messages, sending]);
