@@ -5,6 +5,7 @@ import TxnIcon from './TxnIcon';
 import AllocationBar from './AllocationBar';
 import SageBriefings from './SageBriefings';
 import WeeklyRecap from './WeeklyRecap';
+import SuspiciousCard from './SuspiciousCard';
 import { colorFor } from './categoryColors';
 import { groupAccounts } from './accountGroups';
 import { SearchIcon } from './NavIcons';
@@ -84,6 +85,11 @@ export default function HomePage({ data, session, onAddTxn, onOpenAccount, onOpe
       <WeeklyRecap
         enabled={hasAccounts && profile?.notify_weekly_summary !== false}
         onGoTo={onGoTo}
+      />
+
+      <SuspiciousCard
+        transactions={transactions}
+        onOpenTxn={onEditTxn}
       />
 
       <div className="nw">
