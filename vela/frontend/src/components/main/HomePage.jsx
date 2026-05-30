@@ -6,7 +6,6 @@ import AllocationBar from './AllocationBar';
 import SageBriefings from './SageBriefings';
 import WeeklyRecap from './WeeklyRecap';
 import SuspiciousCard from './SuspiciousCard';
-import PerksCard from './PerksCard';
 import { colorFor } from './categoryColors';
 import { groupAccounts } from './accountGroups';
 import { SearchIcon } from './NavIcons';
@@ -118,12 +117,6 @@ export default function HomePage({ data, session, onAddTxn, onOpenAccount, onOpe
       <SuspiciousCard
         transactions={transactions}
         onOpenTxn={onEditTxn}
-      />
-
-      <PerksCard
-        accounts={accounts}
-        transactions={transactions}
-        onGoTo={onGoTo}
       />
 
       <SageBriefings
