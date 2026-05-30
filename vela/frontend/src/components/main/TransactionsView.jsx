@@ -3,16 +3,29 @@ import { money, moneyAbs, relDate, displayAccountName } from './format';
 import { colorFor } from './categoryColors';
 import TxnIcon from './TxnIcon';
 
+// Quick-filter chips shown above the list when in 'all' / 'search' mode.
+// Each entry knows how to test a transaction. 'all' is the default no-op.
+const QUICK_FILTERS = [
+  { id: 'all',        label: 'All',          test: () => true },
+  { id: 'expenses',   label: 'Expenses',     test: (t) => Number(t.amount) > 0 },
+  { id: 'income',     label: 'Income',       test: (t) => Number(t.amount) < 0 },
+  { id: 'this_month', label: 'This month',   test: (t) => sameMonth(t.date, new Date()) },
+  { id: 'last_30',    label: 'Last 30 days', test: (t) => withinDays(t.date, 30) },
+];
+
 // Filtered transaction view. Three modes:
 //   filter = { kind: 'category', value: 'Food & Dining' }
 //   filter = { kind: 'merchant', value: 'Chipotle Mexican Grill' }
 //   filter = { kind: 'search' }  — live text input, matches name/merchant/category
+//   filter = { kind: 'all' }     — main Transactions tab
 export default function TransactionsView({ data, filter, onBack, onOpenMerchant, onEditTxn }) {
   const { transactions, accounts } = data;
   const isSearch = filter?.kind === 'search';
   const isAll = filter?.kind === 'all';
   const hasSearchBox = isSearch || isAll;
+  const showChips = isSearch || isAll;
   const [query, setQuery] = useState(filter?.value || '');
+  const [quick, setQuick] = useState('all');
   const accountsById = useMemo(
     () => Object.fromEntries((accounts || []).map((a) => [a.id, a])),
     [accounts]
@@ -36,14 +49,37 @@ export default function TransactionsView({ data, filter, onBack, onOpenMerchant,
     );
   }, [transactions, filter, query]);
 
-  const sorted = useMemo(
-    () => [...matches].sort((a, b) => b.date.localeCompare(a.date)),
-    [matches]
+  // Apply the quick-filter chip on top of the kind-of-filter matches.
+  const quickFn = (QUICK_FILTERS.find((f) => f.id === quick) || QUICK_FILTERS[0]).test;
+  const filtered = useMemo(
+    () => (showChips ? matches.filter(quickFn) : matches),
+    [matches, showChips, quickFn]
   );
 
-  // Totals (spending = positive amounts in Plaid convention).
-  const spent = matches.reduce((s, t) => s + (Number(t.amount) > 0 ? Number(t.amount) : 0), 0);
-  const count = matches.length;
+  const sorted = useMemo(
+    () => [...filtered].sort((a, b) => b.date.localeCompare(a.date)),
+    [filtered]
+  );
+
+  // Group sorted txns by date string for day-grouped rendering.
+  const groupedByDay = useMemo(() => {
+    const groups = [];
+    let current = null;
+    for (const t of sorted) {
+      if (!current || current.date !== t.date) {
+        current = { date: t.date, txns: [], dayTotal: 0 };
+        groups.push(current);
+      }
+      current.txns.push(t);
+      // dayTotal = expenses minus income (positive = net spend that day).
+      current.dayTotal += Number(t.amount) || 0;
+    }
+    return groups;
+  }, [sorted]);
+
+  // Header summary numbers (across the filtered set).
+  const spent = filtered.reduce((s, t) => s + (Number(t.amount) > 0 ? Number(t.amount) : 0), 0);
+  const count = filtered.length;
 
   // For category mode: group by merchant for a tappable breakdown.
   const merchantBreakdown = useMemo(() => {
@@ -107,6 +143,37 @@ export default function TransactionsView({ data, filter, onBack, onOpenMerchant,
         </div>
       </header>
 
+      {showChips && (
+        <div
+          style={{
+            display: 'flex', gap: 6, padding: '0 14px 12px', overflowX: 'auto',
+            WebkitOverflowScrolling: 'touch', scrollbarWidth: 'none',
+          }}
+        >
+          {QUICK_FILTERS.map((f) => {
+            const active = quick === f.id;
+            return (
+              <button
+                key={f.id}
+                type="button"
+                onClick={() => setQuick(f.id)}
+                style={{
+                  flex: 'none',
+                  fontSize: 10, letterSpacing: 1.2, textTransform: 'uppercase',
+                  padding: '6px 12px', borderRadius: 20, cursor: 'pointer',
+                  border: `1px solid ${active ? 'var(--accent)' : 'var(--b2)'}`,
+                  background: active ? 'var(--accent-soft)' : 'transparent',
+                  color: active ? 'var(--accent)' : 'var(--t2)',
+                  whiteSpace: 'nowrap',
+                }}
+              >
+                {f.label}
+              </button>
+            );
+          })}
+        </div>
+      )}
+
       {filter?.kind === 'category' && merchantBreakdown.length > 0 && (
         <div className="card">
           <div className="ctitle">Top Merchants</div>
@@ -132,46 +199,96 @@ export default function TransactionsView({ data, filter, onBack, onOpenMerchant,
         </div>
       )}
 
-      <div className="card">
-        <div className="ctitle">{isSearch ? 'Results' : 'All'} ({count})</div>
-        {sorted.length === 0 ? (
-          <div style={{ fontSize: 12, color: 'var(--t3)', lineHeight: 1.7, padding: '4px 0' }}>
+      <div className="card" style={{ padding: '14px 0 6px' }}>
+        {groupedByDay.length === 0 ? (
+          <div style={{ fontSize: 12, color: 'var(--t3)', lineHeight: 1.7, padding: '4px 16px' }}>
             {isSearch
               ? (query.trim() ? `No transactions match "${query.trim()}".` : 'Start typing to find transactions.')
-              : 'No transactions here.'}
+              : quick !== 'all'
+                ? 'Nothing matches that filter yet.'
+                : 'No transactions here.'}
           </div>
         ) : (
-          sorted.map((t) => {
-            const cat = t.category || 'Other';
-            const acc = accountsById[t.account_id];
-            return (
-              <div
-                key={t.id}
-                className="txn"
-                onClick={() => onEditTxn?.(t)}
-                role="button"
-                tabIndex={0}
-                style={{ cursor: onEditTxn ? 'pointer' : 'default' }}
-              >
-                <TxnIcon txn={t} />
-                <div className="txn-bd">
-                  <div className="txn-nm">{t.merchant_name || t.name}</div>
-                  <div className="txn-ct">
-                    <span style={{ color: colorFor(cat) }}>{cat}</span>
-                    {acc && <span style={{ color: 'var(--t3)' }}>{' · '}{displayAccountName(acc)}</span>}
-                  </div>
+          groupedByDay.map((g) => (
+            <div key={g.date} style={{ marginBottom: 4 }}>
+              <div style={{
+                display: 'flex', justifyContent: 'space-between', alignItems: 'baseline',
+                padding: '14px 16px 6px',
+                borderTop: '1px solid var(--b1)',
+              }}>
+                <div style={{
+                  fontFamily: 'var(--serif)', fontSize: 15, fontWeight: 400,
+                  color: 'var(--t1)', letterSpacing: '-0.2px',
+                }}>
+                  {relDate(g.date)}
                 </div>
-                <div className="txn-r">
-                  <div className={`txn-amt ${t.amount < 0 ? 'pos' : ''}`}>
-                    {t.amount < 0 ? '+' : '−'}{moneyAbs(t.amount)}
-                  </div>
-                  <div className="txn-dt">{relDate(t.date)}</div>
+                <div style={{
+                  fontSize: 10, letterSpacing: 1.5, textTransform: 'uppercase',
+                  color: g.dayTotal > 0 ? 'var(--t2)' : 'var(--pos, #7ec39a)',
+                }}>
+                  {g.dayTotal > 0 ? `−${moneyAbs(g.dayTotal)}` : g.dayTotal < 0 ? `+${moneyAbs(g.dayTotal)}` : '—'}
                 </div>
               </div>
-            );
-          })
+              {g.txns.map((t) => {
+                const cat = t.category || 'Other';
+                const acc = accountsById[t.account_id];
+                return (
+                  <div
+                    key={t.id}
+                    className="txn"
+                    onClick={() => onEditTxn?.(t)}
+                    role="button"
+                    tabIndex={0}
+                    style={{ cursor: onEditTxn ? 'pointer' : 'default' }}
+                  >
+                    <TxnIcon txn={t} />
+                    <div className="txn-bd">
+                      <div className="txn-nm">{t.merchant_name || t.name}</div>
+                      <div className="txn-ct" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                        <span style={{
+                          width: 7, height: 7, borderRadius: '50%',
+                          background: colorFor(cat), display: 'inline-block', flexShrink: 0,
+                        }} />
+                        <span style={{ color: 'var(--t2)' }}>{cat}</span>
+                        {acc && (
+                          <span style={{
+                            fontSize: 9, letterSpacing: 1, textTransform: 'uppercase',
+                            color: 'var(--t3)', padding: '2px 6px', borderRadius: 4,
+                            border: '1px solid var(--b1)', marginLeft: 'auto',
+                          }}>
+                            {displayAccountName(acc)}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                    <div className="txn-r">
+                      <div className={`txn-amt ${t.amount < 0 ? 'pos' : ''}`}>
+                        {t.amount < 0 ? '+' : '−'}{moneyAbs(t.amount)}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          ))
         )}
       </div>
     </>
   );
+}
+
+// --- helpers ---
+
+function sameMonth(iso, now) {
+  if (!iso) return false;
+  const d = new Date(iso + (iso.length === 10 ? 'T00:00:00' : ''));
+  return d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth();
+}
+
+function withinDays(iso, days) {
+  if (!iso) return false;
+  const d = new Date(iso + (iso.length === 10 ? 'T00:00:00' : ''));
+  const cutoff = new Date();
+  cutoff.setDate(cutoff.getDate() - days);
+  return d >= cutoff;
 }
