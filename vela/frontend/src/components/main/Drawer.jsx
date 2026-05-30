@@ -13,6 +13,7 @@ const SECTIONS = [
   { id: 'insights',      lbl: 'Reports',      Icon: InsightsIcon },
   { id: 'budget',        lbl: 'Budget',       Icon: BudgetIcon },
   { id: 'subscriptions', lbl: 'Recurring',    Icon: RecurringIcon },
+  { id: 'perks',         lbl: 'Card Perks',   Icon: RecurringIcon },
   { id: 'goals',         lbl: 'Goals',        Icon: GoalsIcon },
   { id: 'investments',   lbl: 'Investments',  Icon: InvestmentsIcon },
   { id: 'coach',         lbl: 'Advice',       Icon: SageIcon },

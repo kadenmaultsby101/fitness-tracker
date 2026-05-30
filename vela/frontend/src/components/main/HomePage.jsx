@@ -123,6 +123,7 @@ export default function HomePage({ data, session, onAddTxn, onOpenAccount, onOpe
       <PerksCard
         accounts={accounts}
         transactions={transactions}
+        onGoTo={onGoTo}
       />
 
       {showChecklist && !loading && (
