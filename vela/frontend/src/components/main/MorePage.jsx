@@ -7,7 +7,7 @@ import BankLogo from './BankLogo';
 import FeedbackCard from './FeedbackCard';
 import UpgradeCard from './UpgradeCard';
 import { groupAccounts } from './accountGroups';
-import { isPro, PAYWALL_ENABLED } from '../../lib/plan';
+import { isPro, PAYWALL_ENABLED, ADMIN_EMAIL } from '../../lib/plan';
 
 const SETTINGS_KEYS = [
   { col: 'notify_transactions',   lbl: 'Transaction Alerts',   sub: 'Notify on every transaction' },
@@ -212,6 +212,19 @@ export default function MorePage({ data, session, onSignOut, onOpenAccount }) {
           <button type="button" className="bsec" style={{ width: '100%' }} onClick={openBillingPortal} disabled={portalBusy}>
             {portalBusy ? 'Opening…' : 'Manage subscription'}
           </button>
+          {session?.user?.email === ADMIN_EMAIL && (
+            <button
+              type="button"
+              className="bsec"
+              style={{ width: '100%', marginTop: 8, fontSize: 10, letterSpacing: 1.5, textTransform: 'uppercase', color: 'var(--t3)' }}
+              onClick={() => {
+                try { localStorage.setItem('vela:forceFree', '1'); } catch { /* private mode */ }
+                window.location.replace('/');
+              }}
+            >
+              Preview Free view (admin)
+            </button>
+          )}
         </div>
       )}
 
