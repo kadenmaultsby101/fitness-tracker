@@ -39,6 +39,8 @@ export default function Paywall({ onUnlocked }) {
   const redeem = async () => {
     if (busy || !code.trim()) return;
     setBusy('code'); setError('');
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 10000);
     try {
       const { data: sess } = await supabase.auth.getSession();
       const token = sess.session?.access_token;
@@ -46,11 +48,20 @@ export default function Paywall({ onUnlocked }) {
         method: 'POST',
         headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({ code: code.trim() }),
+        signal: controller.signal,
       });
       const body = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(body.error || 'Could not redeem code.');
+      if (!res.ok) throw new Error(body.error || `Could not redeem code (HTTP ${res.status}).`);
       onUnlocked?.();
-    } catch (err) { setError(err.message); setBusy(''); }
+    } catch (err) {
+      const msg = err?.name === 'AbortError'
+        ? 'Redeem took too long. Try again.'
+        : (err?.message || 'Network error. Check your connection and try again.');
+      setError(msg);
+      setBusy('');
+    } finally {
+      clearTimeout(timeoutId);
+    }
   };
 
   const opt = (id, label, sub, badge) => {
