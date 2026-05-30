@@ -56,6 +56,9 @@ export default function Paywall({ session, onUnlocked }) {
       });
       const body = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(body.error || `Could not redeem code (HTTP ${res.status}).`);
+      // Clear the admin Preview-Free override so the reload lands in the
+      // real (now-Pro) app, not back on the Paywall.
+      try { localStorage.removeItem('vela:forceFree'); } catch { /* ignore */ }
       // Hard-reload to bypass the supabase auth client's deadlocked profile
       // refresh path. Same trick Stripe checkout uses on success — fresh page
       // mount = fresh client = clean profile fetch.
