@@ -10,6 +10,12 @@ export function isTransferOrPaydown(t, account) {
   const amt = Number(t.amount);
   if ((account.type === 'credit' || account.type === 'loan') && amt < 0) return true;
   const name = `${t.merchant_name || ''} ${t.name || ''}`.toLowerCase();
+  // Common credit-card payment patterns the issuers send on the
+  // depository side ("ONLINE PAYMENT", "MOBILE PAYMENT - THANK YOU",
+  // "ELECTRONIC PAYMENT", "AMEX PMT", etc.).
+  if (/\b(mobile|online|electronic|web)\s+payment\b/.test(name)) return true;
+  if (/payment.*thank\s+you/.test(name)) return true;
+  if (/thank\s+you/.test(name) && /payment|pmt/.test(name)) return true;
   if (/(\bpayment\b|\bpmt\b|autopay|e-?pay).*(card|credit|amex|chase|discover|visa|capital one|citi)/.test(name)) return true;
   if (/(amex|chase|discover|visa|capital one|citi).*(payment|pmt|autopay)/.test(name)) return true;
   return false;
