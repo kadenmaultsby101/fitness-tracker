@@ -31,13 +31,21 @@ function hoursBetween(isoA, isoB) {
   return daysBetween(isoA, isoB) * 24;
 }
 
-// Tuned to avoid food/coffee noise. Buying lunch AND dinner at the same
-// place for the same amount is normal; a POS-glitch duplicate fires within
-// minutes-to-hours and tends to be on a non-trivial charge.
+// Plaid only gives us the posted DATE (YYYY-MM-DD) — no time-of-day on
+// our transactions table — so we can't tell "8am CVS vs 6pm CVS" apart from
+// "same charge twice in 6h". To avoid false-flagging legit same-day repeats
+// (lunch + dinner, two CVS runs), the only same-day case we flag is when
+// THREE OR MORE identical charges land on the same day. Two same-day matches
+// are accepted as normal.
+//
+// Cross-day repeats are still flagged within a tight window (the classic
+// "this posted twice 1-2 days apart" pattern), which is where real posting
+// glitches show up.
 const MIN_DUPLICATE_AMOUNT = 15;       // skip cheap-coffee noise
-const DUPLICATE_WINDOW_HOURS = 6;      // a real glitch is hours, not days
+const DUPLICATE_CROSS_DAY_MAX = 3;     // same charge 1-3 days apart = likely posting glitch
+const SAME_DAY_TRIPLE_THRESHOLD = 3;   // 3+ identical same-day charges = real anomaly
 const MIN_LARGE_AMOUNT = 25;
-const LARGE_MULTIPLE = 4;              // ≥ 4× median (was 3×, too noisy)
+const LARGE_MULTIPLE = 4;              // ≥ 4× median
 const MIN_HISTORY_FOR_LARGE = 8;       // need 8+ prior charges to baseline
 const ONLY_FLAG_LAST_DAYS = 30;        // don't pester about old stuff
 
@@ -54,8 +62,10 @@ export function detectSuspicious(transactions = []) {
   const seen = new Set(); // dedupe by txn id so a row isn't double-flagged
 
   // ---------- DUPLICATE PASS ----------
-  // Group by normalized merchant; within each group, find pairs of charges
-  // that share the same cents amount and are within 48h.
+  // Group by normalized merchant. Within each merchant, group same-amount
+  // charges. Two same-day repeats are NOT flagged (legit double-spend); we
+  // only flag (a) cross-day repeats 1-N days apart, or (b) 3+ identical
+  // same-day charges.
   const byMerchant = new Map();
   for (const t of expenses) {
     const k = normalize(t);
@@ -63,27 +73,57 @@ export function detectSuspicious(transactions = []) {
     byMerchant.get(k).push(t);
   }
   for (const txns of byMerchant.values()) {
-    for (let i = 0; i < txns.length; i++) {
-      const a = txns[i];
-      if (Number(a.amount) < MIN_DUPLICATE_AMOUNT) continue;
-      if (a.date < cutoffIso) continue;
-      for (let j = i + 1; j < txns.length; j++) {
-        const b = txns[j];
-        if (Math.round(Number(a.amount) * 100) !== Math.round(Number(b.amount) * 100)) continue;
-        const hours = hoursBetween(a.date, b.date);
-        if (hours > DUPLICATE_WINDOW_HOURS) continue;
-        // Flag the more recent one as the duplicate of the older one.
-        const [older, newer] = a.date <= b.date ? [a, b] : [b, a];
-        if (seen.has(newer.id)) continue;
-        seen.add(newer.id);
-        const hrsLabel = hours < 1 ? 'minutes' : `${Math.round(hours)}h`;
-        flagged.push({
-          txn: newer,
-          reason: 'duplicate',
-          message: `Same charge ${hrsLabel === 'minutes' ? 'minutes' : 'within ' + hrsLabel} apart — possible duplicate.`,
-          severity: 'warn',
-          related: older.id,
-        });
+    // Group same-amount charges (round to cents).
+    const byCents = new Map();
+    for (const t of txns) {
+      const c = Math.round(Number(t.amount) * 100);
+      if (c < MIN_DUPLICATE_AMOUNT * 100) continue;
+      if (t.date < cutoffIso) continue;
+      if (!byCents.has(c)) byCents.set(c, []);
+      byCents.get(c).push(t);
+    }
+    for (const group of byCents.values()) {
+      if (group.length < 2) continue;
+      // Sort oldest → newest.
+      group.sort((a, b) => a.date.localeCompare(b.date));
+      // (a) Cross-day duplicates within DUPLICATE_CROSS_DAY_MAX.
+      for (let i = 0; i < group.length - 1; i++) {
+        const older = group[i];
+        for (let j = i + 1; j < group.length; j++) {
+          const newer = group[j];
+          if (older.date === newer.date) continue; // same-day handled below
+          const days = daysBetween(older.date, newer.date);
+          if (days > DUPLICATE_CROSS_DAY_MAX) break;
+          if (seen.has(newer.id)) continue;
+          seen.add(newer.id);
+          const dLabel = days < 1 ? '<1 day' : `${Math.round(days)} day${days >= 1.5 ? 's' : ''}`;
+          flagged.push({
+            txn: newer,
+            reason: 'duplicate',
+            message: `Same charge ${dLabel} after the original — possible duplicate posting.`,
+            severity: 'warn',
+            related: older.id,
+          });
+        }
+      }
+      // (b) 3+ identical same-day charges. Group by date.
+      const byDate = new Map();
+      for (const t of group) {
+        if (!byDate.has(t.date)) byDate.set(t.date, []);
+        byDate.get(t.date).push(t);
+      }
+      for (const sameDay of byDate.values()) {
+        if (sameDay.length < SAME_DAY_TRIPLE_THRESHOLD) continue;
+        for (const t of sameDay) {
+          if (seen.has(t.id)) continue;
+          seen.add(t.id);
+          flagged.push({
+            txn: t,
+            reason: 'same_day_triple',
+            message: `${sameDay.length} identical charges on the same day — worth checking.`,
+            severity: 'warn',
+          });
+        }
       }
     }
   }
