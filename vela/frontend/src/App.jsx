@@ -148,7 +148,7 @@ export default function App() {
     return (
       <>
         {banner}
-        <Paywall onUnlocked={() => loadProfile(session)} />
+        <Paywall session={session} onUnlocked={() => loadProfile(session)} />
         <DevPlanToggle />
       </>
     );
