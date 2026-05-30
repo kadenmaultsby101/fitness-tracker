@@ -10,6 +10,7 @@ import SagePage from './SagePage';
 import MorePage from './MorePage';
 import InsightsPage from './InsightsPage';
 import SubscriptionsPage from './SubscriptionsPage';
+import PerksPage from './PerksPage';
 import AccountsPage from './AccountsPage';
 import InvestmentsPage from './InvestmentsPage';
 import CashFlowPage from './CashFlowPage';
@@ -211,6 +212,14 @@ export default function MainApp({ session }) {
         onBack={() => { setSelectedAccountId(null); setPage('home'); }}
         onEditAccount={(a) => setModal({ kind: 'editAccount', account: a })}
         onEditTxn={(t) => setModal({ kind: 'editTxn', txn: t })}
+      />
+    );
+  } else if (page === 'perks') {
+    activePage = (
+      <PerksPage
+        data={data}
+        plaidItems={data.plaidItems}
+        onBack={() => setPage('home')}
       />
     );
   } else if (page === 'subscriptions') {
