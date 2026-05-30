@@ -24,12 +24,13 @@ import Drawer from './Drawer';
 import { NAV_ICON } from './NavIcons';
 import '../../styles/app.css';
 
-// Bottom nav = 5 most-used; the Menu button opens the full Monarch-style
-// drawer (Drawer.jsx) with every section.
+// Bottom nav; the Menu button opens the full Monarch-style drawer
+// (Drawer.jsx) with every section.
 const NAV = [
   { id: 'home',         lbl: 'Home' },
   { id: 'transactions', lbl: 'Transactions' },
   { id: 'budget',       lbl: 'Budget' },
+  { id: 'goals',        lbl: 'Goals' },
   { id: 'coach',        lbl: 'Sage' },
   { id: 'menu',         lbl: 'Menu' },
 ];

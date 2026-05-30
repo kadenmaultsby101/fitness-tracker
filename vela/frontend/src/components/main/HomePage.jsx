@@ -7,7 +7,6 @@ import SageBriefings from './SageBriefings';
 import WeeklyRecap from './WeeklyRecap';
 import SuspiciousCard from './SuspiciousCard';
 import PerksCard from './PerksCard';
-import HomeGoalsCard from './HomeGoalsCard';
 import { colorFor } from './categoryColors';
 import { groupAccounts } from './accountGroups';
 import { SearchIcon } from './NavIcons';
@@ -263,8 +262,6 @@ export default function HomePage({ data, session, onAddTxn, onOpenAccount, onOpe
           })
         )}
       </div>
-
-      <HomeGoalsCard goals={goals} onGoTo={onGoTo} />
 
       {showChecklist && !loading && (
         <div className="card" style={{ borderColor: 'var(--b2)' }}>
