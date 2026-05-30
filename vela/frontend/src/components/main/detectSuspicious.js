@@ -31,23 +31,32 @@ function hoursBetween(isoA, isoB) {
   return daysBetween(isoA, isoB) * 24;
 }
 
-// Plaid only gives us the posted DATE (YYYY-MM-DD) — no time-of-day on
-// our transactions table — so we can't tell "8am CVS vs 6pm CVS" apart from
-// "same charge twice in 6h". To avoid false-flagging legit same-day repeats
-// (lunch + dinner, two CVS runs), the only same-day case we flag is when
-// THREE OR MORE identical charges land on the same day. Two same-day matches
-// are accepted as normal.
+// IMPORTANT — KNOWN LIMITATION
+// Our transactions table only stores the posted DATE (YYYY-MM-DD), with no
+// time-of-day. That means we genuinely cannot distinguish "two charges 6
+// minutes apart at Raising Cane's" (real glitch) from "lunch and dinner at
+// Raising Cane's" (legit, common). The proper fix is a follow-up project:
+// add authorized_datetime to the transactions table, update the Plaid sync
+// to fill it, and update useFinancialData's select. Until that's done we
+// stay ULTRA-CONSERVATIVE — flag only patterns that almost always indicate
+// a real problem, even if we miss some real glitches.
 //
-// Cross-day repeats are still flagged within a tight window (the classic
-// "this posted twice 1-2 days apart" pattern), which is where real posting
-// glitches show up.
-const MIN_DUPLICATE_AMOUNT = 15;       // skip cheap-coffee noise
-const DUPLICATE_CROSS_DAY_MAX = 3;     // same charge 1-3 days apart = likely posting glitch
-const SAME_DAY_TRIPLE_THRESHOLD = 3;   // 3+ identical same-day charges = real anomaly
-const MIN_LARGE_AMOUNT = 25;
-const LARGE_MULTIPLE = 4;              // ≥ 4× median
-const MIN_HISTORY_FOR_LARGE = 8;       // need 8+ prior charges to baseline
-const ONLY_FLAG_LAST_DAYS = 30;        // don't pester about old stuff
+// What we flag now (v3 — strict):
+//   - CROSS-DAY ONLY: same merchant + same cents amount, 1-3 days apart,
+//     amount ≥ $30. (Classic posting-glitch / pending-vs-posted-ghost
+//     pattern; rare for legit repeat purchases of identical price.)
+//   - UNUSUALLY LARGE: charge ≥ 4× the median of ≥8 prior charges at that
+//     merchant, amount ≥ $30. (User explicitly wants this surfaced.)
+//
+// What we explicitly DON'T flag anymore:
+//   - Same-day duplicates of any count — too noisy without time data
+//     (cane's lunch+dinner, multiple Starbucks runs, etc.)
+const MIN_DUPLICATE_AMOUNT = 30;
+const DUPLICATE_CROSS_DAY_MAX = 3;
+const MIN_LARGE_AMOUNT = 30;
+const LARGE_MULTIPLE = 4;
+const MIN_HISTORY_FOR_LARGE = 8;
+const ONLY_FLAG_LAST_DAYS = 30;
 
 export function detectSuspicious(transactions = []) {
   const expenses = transactions.filter((t) => Number(t.amount) > 0);
@@ -86,42 +95,24 @@ export function detectSuspicious(transactions = []) {
       if (group.length < 2) continue;
       // Sort oldest → newest.
       group.sort((a, b) => a.date.localeCompare(b.date));
-      // (a) Cross-day duplicates within DUPLICATE_CROSS_DAY_MAX.
+      // CROSS-DAY duplicates within DUPLICATE_CROSS_DAY_MAX. Same-day
+      // pairs are intentionally skipped — too noisy without time data.
       for (let i = 0; i < group.length - 1; i++) {
         const older = group[i];
         for (let j = i + 1; j < group.length; j++) {
           const newer = group[j];
-          if (older.date === newer.date) continue; // same-day handled below
+          if (older.date === newer.date) continue;
           const days = daysBetween(older.date, newer.date);
           if (days > DUPLICATE_CROSS_DAY_MAX) break;
           if (seen.has(newer.id)) continue;
           seen.add(newer.id);
-          const dLabel = days < 1 ? '<1 day' : `${Math.round(days)} day${days >= 1.5 ? 's' : ''}`;
+          const dLabel = days < 1.5 ? '1 day' : `${Math.round(days)} days`;
           flagged.push({
             txn: newer,
             reason: 'duplicate',
             message: `Same charge ${dLabel} after the original — possible duplicate posting.`,
             severity: 'warn',
             related: older.id,
-          });
-        }
-      }
-      // (b) 3+ identical same-day charges. Group by date.
-      const byDate = new Map();
-      for (const t of group) {
-        if (!byDate.has(t.date)) byDate.set(t.date, []);
-        byDate.get(t.date).push(t);
-      }
-      for (const sameDay of byDate.values()) {
-        if (sameDay.length < SAME_DAY_TRIPLE_THRESHOLD) continue;
-        for (const t of sameDay) {
-          if (seen.has(t.id)) continue;
-          seen.add(t.id);
-          flagged.push({
-            txn: t,
-            reason: 'same_day_triple',
-            message: `${sameDay.length} identical charges on the same day — worth checking.`,
-            severity: 'warn',
           });
         }
       }
