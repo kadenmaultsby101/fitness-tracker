@@ -12,19 +12,24 @@ const VALUE_PROPS = [
 
 // Premium full-screen sell screen for onboarded users without a plan.
 // Start the 7-day trial (annual highlighted), redeem a comp code, or sign out.
-export default function Paywall({ onUnlocked }) {
+export default function Paywall({ session, onUnlocked }) {
   const [busy, setBusy] = useState('');
   const [error, setError] = useState('');
   const [plan, setPlan] = useState('annual');
   const [code, setCode] = useState('');
   const [showCode, setShowCode] = useState(false);
 
+  // Use the session passed down from App so we never call
+  // supabase.auth.getSession() inside Paywall — a previous bug was that
+  // getSession()'s internal token refresh could hang indefinitely after a
+  // long-lived session, trapping the Redeem / Subscribe buttons on "…".
+  const token = session?.access_token;
+
   const startTrial = async () => {
     if (busy) return;
     setBusy('checkout'); setError('');
     try {
-      const { data: sess } = await supabase.auth.getSession();
-      const token = sess.session?.access_token;
+      if (!token) throw new Error('You\'re signed out. Refresh the page.');
       const res = await fetch(`${API}/api/stripe/checkout`, {
         method: 'POST',
         headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
@@ -42,8 +47,7 @@ export default function Paywall({ onUnlocked }) {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 10000);
     try {
-      const { data: sess } = await supabase.auth.getSession();
-      const token = sess.session?.access_token;
+      if (!token) throw new Error('You\'re signed out. Refresh the page.');
       const res = await fetch(`${API}/api/redeem-code`, {
         method: 'POST',
         headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
