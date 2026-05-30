@@ -3,24 +3,7 @@ import { money, moneyAbs, relDate, displayAccountName } from './format';
 import { colorFor } from './categoryColors';
 import TxnIcon from './TxnIcon';
 import { detectSuspicious, flaggedIdSet } from './detectSuspicious';
-
-// A transaction is a "transfer" (not a real expense or income) when it
-// represents money moving between your own accounts — paying down a credit
-// card, paying a loan, transferring between checking and savings. Plaid sends
-// these as paired transactions on both sides; without filtering they double-
-// count and a credit-card paydown looks like income.
-function isTransferOrPaydown(t, account) {
-  if (!account) return false;
-  const amt = Number(t.amount);
-  // On credit/loan accounts, a negative amount is a payment received or a
-  // refund — never income.
-  if ((account.type === 'credit' || account.type === 'loan') && amt < 0) return true;
-  // Name-based detection for the depository side of a credit-card payment.
-  const name = `${t.merchant_name || ''} ${t.name || ''}`.toLowerCase();
-  if (/(\bpayment\b|\bpmt\b|autopay|e-?pay).*(card|credit|amex|chase|discover|visa|capital one|citi)/.test(name)) return true;
-  if (/(amex|chase|discover|visa|capital one|citi).*(payment|pmt|autopay)/.test(name)) return true;
-  return false;
-}
+import { isTransferOrPaydown, prettyName } from './txnPretty';
 
 // Quick-filter chips shown above the list when in 'all' / 'search' mode.
 // Each entry tests a (transaction, account) pair. 'all' is the default no-op.
@@ -320,43 +303,6 @@ export default function TransactionsView({ data, filter, onBack, onOpenMerchant,
 }
 
 // --- helpers ---
-
-// Make the row name human-readable. Plaid sometimes returns raw bank-feed
-// strings like "ORIG CO NAME:DISCOVER CO ENTRY DESCR:E-PAYMENT…". For
-// detected transfers we hard-label the row by the issuer; otherwise we strip
-// known noise prefixes from the raw name and keep the merchant_name as-is.
-function prettyName(t, isTransfer) {
-  const raw = (t.merchant_name || t.name || '').trim();
-  if (isTransfer) {
-    const issuer = detectIssuer(raw);
-    return issuer ? `${issuer} Payment` : 'Credit Card Payment';
-  }
-  if (!t.merchant_name) {
-    // Only clean the noisy raw `name` — merchant_name from Plaid is already nice.
-    return raw
-      .replace(/\bORIG\s+CO\s+NAME:?/i, '')
-      .replace(/\bCO\s+ENTRY\s+DESCR:?/i, '')
-      .replace(/\bDESCR:?/i, '')
-      .replace(/\bENTRY:?/i, '')
-      .replace(/\s{2,}/g, ' ')
-      .trim()
-      || raw;
-  }
-  return raw;
-}
-
-function detectIssuer(name) {
-  const n = name.toLowerCase();
-  if (/discover/.test(n)) return 'Discover';
-  if (/\bamex\b|american express/.test(n)) return 'Amex';
-  if (/chase/.test(n)) return 'Chase';
-  if (/capital\s*one/.test(n)) return 'Capital One';
-  if (/citi/.test(n)) return 'Citi';
-  if (/visa/.test(n)) return 'Visa';
-  if (/mastercard|master\s*card/.test(n)) return 'Mastercard';
-  if (/robinhood/.test(n)) return 'Robinhood';
-  return null;
-}
 
 function sameMonth(iso, now) {
   if (!iso) return false;

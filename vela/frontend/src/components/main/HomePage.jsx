@@ -6,6 +6,7 @@ import AllocationBar from './AllocationBar';
 import SageBriefings from './SageBriefings';
 import WeeklyRecap from './WeeklyRecap';
 import SuspiciousCard from './SuspiciousCard';
+import { prettyName, isTransferOrPaydown } from './txnPretty';
 import { colorFor } from './categoryColors';
 import { groupAccounts } from './accountGroups';
 import { SearchIcon } from './NavIcons';
@@ -29,7 +30,8 @@ export default function HomePage({ data, session, onAddTxn, onOpenAccount, onOpe
   const sevenDaysAgo = new Date();
   sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
   const sevenDaysIso = sevenDaysAgo.toISOString().slice(0, 10);
-  const recent = transactions.filter((t) => t.date >= sevenDaysIso).slice(0, 10);
+  const recent = transactions.filter((t) => t.date >= sevenDaysIso).slice(0, 5);
+  const hiddenRecent = Math.max(0, transactions.filter((t) => t.date >= sevenDaysIso).length - recent.length);
   const accountsById = Object.fromEntries(accounts.map((a) => [a.id, a]));
   const hasAccounts = accounts.length > 0;
   const hasTxns = transactions.length > 0;
@@ -221,8 +223,9 @@ export default function HomePage({ data, session, onAddTxn, onOpenAccount, onOpe
           </div>
         ) : (
           recent.map((t) => {
-            const cat = t.category || 'Other';
             const acc = accountsById[t.account_id];
+            const transfer = isTransferOrPaydown(t, acc);
+            const cat = transfer ? 'Transfer' : (t.category || 'Other');
             return (
               <div
                 key={t.id}
@@ -234,7 +237,7 @@ export default function HomePage({ data, session, onAddTxn, onOpenAccount, onOpe
               >
                 <TxnIcon txn={t} />
                 <div className="txn-bd">
-                  <div className="txn-nm">{t.merchant_name || t.name}</div>
+                  <div className="txn-nm">{prettyName(t, transfer)}</div>
                   <div className="txn-ct">
                     <span style={{ color: colorFor(cat) }}>{cat}</span>
                     {acc && (
@@ -253,6 +256,21 @@ export default function HomePage({ data, session, onAddTxn, onOpenAccount, onOpe
               </div>
             );
           })
+        )}
+        {recent.length > 0 && (
+          <button
+            type="button"
+            onClick={() => onGoTo?.('transactions')}
+            style={{
+              background: 'none', border: 'none', cursor: 'pointer',
+              width: '100%', padding: '12px 0 2px',
+              fontSize: 10, letterSpacing: 1.5, textTransform: 'uppercase',
+              color: 'var(--t2)',
+              borderTop: '1px solid var(--b1)', marginTop: 6,
+            }}
+          >
+            {hiddenRecent > 0 ? `View all transactions (${hiddenRecent}+ more)` : 'View all transactions'}
+          </button>
         )}
       </div>
 
