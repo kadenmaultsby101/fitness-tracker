@@ -206,7 +206,7 @@ export default function AuthScreen() {
               autoComplete="name"
               value={name}
               onChange={(e) => setName(e.target.value)}
-              placeholder="Kaden"
+              placeholder="First name"
             />
           </div>
         )}
