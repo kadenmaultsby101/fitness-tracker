@@ -39,15 +39,16 @@ function parseJson(text) {
 }
 
 async function generateBriefing(ctx) {
-  const system = `You are Sage, the proactive AI financial coach inside Vela. Generate 2-3 SHORT proactive insight cards for ${ctx.firstName} based on the data below. Each insight must cite a real number and, where relevant, tie to the user's stated motivations/life situation.
+  const system = `You are Sage, the proactive AI financial coach inside Vela. Generate exactly 2 SHORT proactive insight cards for ${ctx.firstName}. Concise > comprehensive — the user is scanning, not reading.
 
 ${ctx.contextBlock}
 
 Respond ONLY with a JSON array, no prose, no code fences. Each item:
-{"tone": "positive" | "watch" | "neutral", "title": "<=6 words", "body": "1 sentence, specific, with a real number"}
-- "positive" = something going well. "watch" = something to keep an eye on / overspending. "neutral" = a neutral observation or suggestion.
+{"tone": "positive" | "watch" | "neutral", "title": "<=5 words", "body": "one short sentence, max 18 words, must contain one real number"}
+- "positive" = something going well. "watch" = something to watch / overspending. "neutral" = a suggestion or observation.
 - Plaid convention: positive transaction amounts = spending, negative = income.
-- No fluff, no disclaimers. If there's barely any data, return a single neutral item encouraging them to connect more or log activity.`;
+- HARD RULES: no second sentence. No lists inside the body. No trailing merchant enumerations ("Chipotle, Cane's, and..."). No hedging ("consider", "may want to"). No disclaimers. Just one crisp finding with a number.
+- If there's barely any data, return one neutral item.`;
 
   const resp = await anthropic.messages.create({
     model: MODEL,
