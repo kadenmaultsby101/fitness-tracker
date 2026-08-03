@@ -73,8 +73,12 @@ export default async function handler(req, res) {
         await backfillBranding(item);
         if (item.institution_logo || item.institution_color) branded += 1;
 
-        const { data: acc } = await plaid.accountsGet({ access_token: item.plaid_access_token });
-        console.info(`[plaid] sync: ${item.institution_name} returned ${acc.accounts.length} accounts`);
+        // Use accountsBalanceGet (forces a real-time balance pull from the
+        // institution) instead of accountsGet (returns Plaid's cached
+        // balance, which can lag 12–24h for fintechs like Robinhood — that
+        // caused "credit-card debt keeps growing" reports).
+        const { data: acc } = await plaid.accountsBalanceGet({ access_token: item.plaid_access_token });
+        console.info(`[plaid] sync: ${item.institution_name} returned ${acc.accounts.length} accounts (fresh balances)`);
         await upsertAccountsFromPlaid(supabaseAdmin, user.id, item.id, acc.accounts);
 
         try {
