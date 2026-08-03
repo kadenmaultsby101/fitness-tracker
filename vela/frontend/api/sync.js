@@ -73,12 +73,30 @@ export default async function handler(req, res) {
         await backfillBranding(item);
         if (item.institution_logo || item.institution_color) branded += 1;
 
-        // Use accountsBalanceGet (forces a real-time balance pull from the
-        // institution) instead of accountsGet (returns Plaid's cached
-        // balance, which can lag 12–24h for fintechs like Robinhood — that
-        // caused "credit-card debt keeps growing" reports).
-        const { data: acc } = await plaid.accountsBalanceGet({ access_token: item.plaid_access_token });
-        console.info(`[plaid] sync: ${item.institution_name} returned ${acc.accounts.length} accounts (fresh balances)`);
+        // Try accountsBalanceGet first — it forces a real-time balance pull
+        // from the institution (needed for fintechs like Robinhood where
+        // Plaid's cached balances lag 12–24h). Fall back to accountsGet if
+        // the balance product isn't enabled for this item, so sync never
+        // fully breaks over one flaky account.
+        let acc;
+        try {
+          const r = await plaid.accountsBalanceGet({ access_token: item.plaid_access_token });
+          acc = r.data;
+          console.info(
+            `[plaid] sync: ${item.institution_name} returned ${acc.accounts.length} accounts (fresh)`,
+            acc.accounts.map((a) => ({
+              n: a.name, m: a.mask, bal: a.balances?.current, upd: a.balances?.last_updated_datetime,
+            })),
+          );
+        } catch (balErr) {
+          console.warn(
+            `[plaid] accountsBalanceGet failed for ${item.institution_name}, falling back to accountsGet:`,
+            plaidErrorMessage(balErr),
+          );
+          const r = await plaid.accountsGet({ access_token: item.plaid_access_token });
+          acc = r.data;
+          console.info(`[plaid] sync: ${item.institution_name} returned ${acc.accounts.length} accounts (cached fallback)`);
+        }
         await upsertAccountsFromPlaid(supabaseAdmin, user.id, item.id, acc.accounts);
 
         try {
